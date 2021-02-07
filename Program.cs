@@ -1,6 +1,7 @@
 ﻿using Ca38Bot.Board;
 using Ca38Bot.DAL;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -15,9 +16,9 @@ namespace Ca38Bot
 {
     public static class Program
     {
-        private static Chessboard board = new Chessboard();
+        private static readonly Chessboard board = new Chessboard();
         private static TelegramBotClient Bot;
-        private static Random rng = new Random();
+        private static readonly Random rng = new Random();
 
         public static async Task Main()
         {
@@ -60,7 +61,30 @@ namespace Ca38Bot
             {
                 // Send inline keyboard
                 case "/gioca":
-                    await SendInlineKeyboard(message);
+                    await SendInlineKeyboard(message, null);
+                    break;
+                case "/fen":
+                    string fen = "";
+                    if (db.Games.SingleOrDefault(g => g.ChatID == messageEventArgs.Message.Chat.Id) != null)
+                    {
+                        if (db.Games.SingleOrDefault(g => g.ChatID == messageEventArgs.Message.Chat.Id).BotGame != null)
+                        {
+                            fen = db.Games.SingleOrDefault(g => g.ChatID == messageEventArgs.Message.Chat.Id).BotGame;
+                        }
+                        else
+                        {
+                            fen = "Non abbiamo una partita in corso";
+                        }
+                    }
+                    else
+                    {
+                        fen = "Non abbiamo una partita in corso";
+                    }
+                    await Bot.SendTextMessageAsync(
+                        chatId: message.Chat.Id,
+                        text: fen,
+                        parseMode: ParseMode.Html
+                    );
                     break;
                 default:
                     break;
@@ -69,12 +93,11 @@ namespace Ca38Bot
 
         // Send inline keyboard
         // You can process responses in BotOnCallbackQueryReceived handler
-        static async Task SendInlineKeyboard(Message message)
+        static async Task SendInlineKeyboard(Message message, string[] keys)
         {
             using GamesDbContext db = new GamesDbContext();
             await Bot.SendChatActionAsync(message.Chat.Id, ChatAction.Typing);
             string game;
-            string[] subs;
             string res1 = "";
             string res2 = "";
             // Simulate longer running task
@@ -94,21 +117,44 @@ namespace Ca38Bot
             {
                 game = db.Games.SingleOrDefault(g => g.ChatID == message.Chat.Id).BotGame;
                 res1 += Render(game);
-                subs = game.Split("/");
-                if(subs[^1] == "p")
+                List<List<InlineKeyboardButton>> keylistlist = new List<List<InlineKeyboardButton>>
+                {
+                    new List<InlineKeyboardButton>()
+                };
+                if (keys != null)
                 {
                     res2 = "Tocca a te";
+                    int cnt = 0;
+                    int i = 0;
+                    foreach (string s in keys)
+                    {
+                        if (s == null || s == "")
+                        {
+                            continue;
+                        }
+                        if(s.Length == 4)
+                        {
+                            keylistlist[i].Add(InlineKeyboardButton.WithCallbackData(s.Substring(2, 2), s));
+                        }
+                        else
+                        {
+                            keylistlist[i].Add(InlineKeyboardButton.WithCallbackData(s, s));
+                        }
+                        cnt++;
+                        if (cnt > 6)
+                        {
+                            keylistlist.Add(new List<InlineKeyboardButton>());
+                            cnt = 0;
+                            i++;
+                        }
+                    }
+                    string pieces = "PRNBQK";
+                    if(pieces.IndexOf(keylistlist[0].ElementAt(0).Text) == -1)
+                    {
+                        keylistlist[i].Add(InlineKeyboardButton.WithCallbackData("Back", "Back"));
+                    }
                 }
-                else
-                {
-                    res2 = "Tocca a me";
-                }
-                inlineKeyboard = new InlineKeyboardMarkup(new[]
-                {
-                        InlineKeyboardButton.WithCallbackData("a38", "w"),
-                        InlineKeyboardButton.WithCallbackData("Casuale", "r"),
-                        InlineKeyboardButton.WithCallbackData("Nero", "b"),
-                });
+                inlineKeyboard = new InlineKeyboardMarkup(keylistlist);
             }
             if (res1 != "")
             {
@@ -118,11 +164,14 @@ namespace Ca38Bot
                     parseMode: ParseMode.Html
                 );
             }
-            await Bot.SendTextMessageAsync(
-                chatId: message.Chat.Id,
-                text: res2,
-                replyMarkup: inlineKeyboard
-            );
+            if (res2 != "")
+            {
+                await Bot.SendTextMessageAsync(
+                    chatId: message.Chat.Id,
+                    text: res2,
+                    replyMarkup: inlineKeyboard
+                );
+            }
         }
 
         private static string Render(string fen)
@@ -158,6 +207,8 @@ namespace Ca38Bot
             return res;
         }
 
+        private static string[] availableMoves = null;
+        private static Chessboard.Piece p;
         // Process Inline Keyboard callback data
         private static async void BotOnCallbackQueryReceived(object sender, CallbackQueryEventArgs callbackQueryEventArgs)
         {
@@ -165,9 +216,9 @@ namespace Ca38Bot
             var callbackQuery = callbackQueryEventArgs.CallbackQuery;
             string fen;
             //If we don't have a game in progress start a new one
+            string[] movablePieces = null;
             if (db.Games.SingleOrDefault(g => g.ChatID == callbackQuery.Message.Chat.Id).BotGame == null)
             {
-
                 fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR";
                 string first = callbackQuery.Data switch
                 {
@@ -179,15 +230,81 @@ namespace Ca38Bot
                 fen += first;
                 db.Games.SingleOrDefault(g => g.ChatID == callbackQuery.Message.Chat.Id).BotGame = fen;
                 db.SaveChanges();
-                board.LoadFEN(fen.Substring(0, fen.Length - 2));
+                board.LoadFEN(fen);
+                movablePieces = board.GetMovablePieces(Chessboard.Side.WHITE);
             }
             else
             {
                 fen = db.Games.SingleOrDefault(g => g.ChatID == callbackQuery.Message.Chat.Id).BotGame;
-                board.LoadFEN(fen.Substring(0, fen.Length - 2));
-                board.GetMovementMask(Chessboard.Piece.BLACKPAWN, board.BlackPieces, board.BlackPawns);
+                board.LoadFEN(fen);
+                string pieces = "PRNBQK";
+                if(pieces.IndexOf(callbackQuery.Data) != -1)
+                {
+                    p = callbackQuery.Data switch
+                    {
+                        "P" => Chessboard.Piece.WHITEPAWN,
+                        "R" => Chessboard.Piece.ROOK,
+                        "N" => Chessboard.Piece.KNIGHT,
+                        "B" => Chessboard.Piece.BISHOP,
+                        "Q" => Chessboard.Piece.QUEEN,
+                        "K" => Chessboard.Piece.KING,
+                        _ => 0
+                    };
+                    availableMoves = board.GetValidMoves(Chessboard.Side.WHITE, p);
+                }
+                else
+                {
+                    if (callbackQuery.Data != "Back")
+                    {
+                        string from, to;
+                        from = callbackQuery.Data.Substring(0, 2);
+                        to = callbackQuery.Data.Substring(2, 2);
+                        board.Move(from, to);
+                        board.LoadFEN(board.fen);
+                        db.Games.SingleOrDefault(g => g.ChatID == callbackQuery.Message.Chat.Id).BotGame = board.fen;
+                        db.SaveChanges();
+
+                        string[] botMovablePieces = board.GetMovablePieces(Chessboard.Side.BLACK);
+                        int m = rng.Next(0, botMovablePieces.Length);
+                        p = botMovablePieces.ElementAt(m) switch
+                        {
+                            "P" => Chessboard.Piece.BLACKPAWN,
+                            "R" => Chessboard.Piece.ROOK,
+                            "N" => Chessboard.Piece.KNIGHT,
+                            "B" => Chessboard.Piece.BISHOP,
+                            "Q" => Chessboard.Piece.QUEEN,
+                            "K" => Chessboard.Piece.KING,
+                            _ => 0
+                        };
+                        string o = (botMovablePieces.ElementAt(m) != "P") ? botMovablePieces.ElementAt(m) : "";
+                        string[] botAvailableMoves = board.GetValidMoves(Chessboard.Side.BLACK, p);
+                        m = rng.Next(0, botAvailableMoves.Length);
+                        string move = botAvailableMoves.ElementAt(m);
+                        from = move.Substring(0, 2);
+                        to = move.Substring(2, 2);
+                        o += to;
+                        board.Move(from, to);
+                        board.LoadFEN(board.fen);
+                        db.Games.SingleOrDefault(g => g.ChatID == callbackQuery.Message.Chat.Id).BotGame = board.fen;
+                        db.SaveChanges();
+
+                        await Bot.SendTextMessageAsync(
+                            chatId: callbackQuery.Message.Chat.Id,
+                            text: "Ho mosso " + o,
+                            parseMode: ParseMode.Html
+                        );
+                    }
+                    movablePieces = board.GetMovablePieces(Chessboard.Side.WHITE);
+                }
             }
-            await SendInlineKeyboard(callbackQuery.Message);
+            if(movablePieces == null)
+            {
+                await SendInlineKeyboard(callbackQuery.Message, availableMoves);
+            }
+            else
+            {
+                await SendInlineKeyboard(callbackQuery.Message, movablePieces);
+            }
         }
 
         #region Inline Mode

@@ -1,9 +1,18 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
 
 namespace Ca38Bot.Board
 {
     public class Chessboard
     {
+        /* SIDES */
+        public enum Side
+        {
+            WHITE,
+            BLACK,
+        }
         /* PIECES */
         public enum Piece{
             WHITEPAWN,
@@ -14,7 +23,6 @@ namespace Ca38Bot.Board
             KING,
             QUEEN
         }
-
         /* WHITE PIECES */
         public ulong WhitePawns;
         public ulong WhiteRooks;
@@ -36,6 +44,8 @@ namespace Ca38Bot.Board
         public ulong BlackPieces;
         public ulong AllPieces;
 
+        public string fen;
+
         public Chessboard() 
         {
             WhitePawns = Masks.WHITEPAWNS;
@@ -55,13 +65,15 @@ namespace Ca38Bot.Board
             WhitePieces =  WhitePawns | WhiteRooks | WhiteBishops | WhiteKnights | WhiteKing | WhiteQueen;
             BlackPieces = BlackPawns | BlackRooks | BlackBishops | BlackKnights | BlackKing | BlackQueen;
             AllPieces = WhitePieces | BlackPieces;
+
+            fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR";
         }
 
         public void LoadFEN(string fen)
         {
-            string[] subs = fen.Split("/");
+            string[] subs = fen[0..^2].Split("/");
             string board = String.Join("", subs);
-            string bb = "";
+            string bb;
             for (int j = 0; j < 12; ++j)
             {
                 bb = "";
@@ -143,6 +155,13 @@ namespace Ca38Bot.Board
             WhitePieces = WhitePawns | WhiteRooks | WhiteBishops | WhiteKnights | WhiteKing | WhiteQueen;
             BlackPieces = BlackPawns | BlackRooks | BlackBishops | BlackKnights | BlackKing | BlackQueen;
             AllPieces = WhitePieces | BlackPieces;
+
+            this.fen = fen;
+        }
+
+        public void FENToPng()
+        {
+
         }
 
         private ulong Convert(string input)
@@ -158,6 +177,174 @@ namespace Ca38Bot.Board
                 res += (ulong)Math.Pow(2 * d, 63 - i);
             }
             return res;
+        }
+
+        public string[] GetValidMoves(Side side, Piece piece)
+        {
+            string move;
+            List<string> res = new List<string>();
+            ulong[] fileMasks = new ulong[]
+            {
+                Masks.MASKFILEA,
+                Masks.MASKFILEB,
+                Masks.MASKFILEC,
+                Masks.MASKFILED,
+                Masks.MASKFILEE,
+                Masks.MASKFILEF,
+                Masks.MASKFILEG,
+                Masks.MASKFILEH,
+            };
+            ulong[] rankMasks = new ulong[]
+            {
+                Masks.MASKRANK8,
+                Masks.MASKRANK7,
+                Masks.MASKRANK6,
+                Masks.MASKRANK5,
+                Masks.MASKRANK4,
+                Masks.MASKRANK3,
+                Masks.MASKRANK2,
+                Masks.MASKRANK1,
+            };
+            ulong piecePos = piece switch
+            {
+                Piece.WHITEPAWN => WhitePawns,
+                Piece.BLACKPAWN => BlackPawns,
+                Piece.ROOK => (side == Side.WHITE) ? WhiteRooks : BlackRooks,
+                Piece.KNIGHT => (side == Side.WHITE) ? WhiteKnights : BlackKnights,
+                Piece.BISHOP => (side == Side.WHITE) ? WhiteBishops : BlackBishops,
+                Piece.QUEEN => (side == Side.WHITE) ? WhiteQueen : BlackQueen,
+                Piece.KING => (side == Side.WHITE) ? WhiteKing : BlackKing,
+                _ => 0,
+            };
+
+            List<ulong> startingMask = new List<ulong>();
+            List<string> startingPos = new List<string>();
+            int x, y;
+            for (int j = 0; j < 64; ++j)
+            {
+                move = "";
+                x = j / 8;
+                y = j % 8;
+                if ((piecePos & fileMasks[x] & rankMasks[y]) != 0)
+                {
+                    move += x switch
+                    {
+                        0 => "a",
+                        1 => "b",
+                        2 => "c",
+                        3 => "d",
+                        4 => "e",
+                        5 => "f",
+                        6 => "g",
+                        7 => "h",
+                        _ => "",
+                    };
+                    move += (8 - y).ToString();
+                    startingPos.Add(move);
+                    startingMask.Add(piecePos & fileMasks[x] & rankMasks[y]);
+                }
+            }
+            ulong mask;
+            for (int i = 0; i < startingMask.Count(); ++i)
+            {
+                mask = GetMovementMask(piece, (side == Side.WHITE) ? WhitePieces : BlackPieces, startingMask.ElementAt(i));
+                for (int j = 0; j < 64; ++j)
+                {
+                    move = "";
+                    x = j / 8;
+                    y = j % 8;
+                    if ((mask & fileMasks[x] & rankMasks[y]) != 0)
+                    {
+                        move += x switch
+                        {
+                            0 => "a",
+                            1 => "b",
+                            2 => "c",
+                            3 => "d",
+                            4 => "e",
+                            5 => "f",
+                            6 => "g",
+                            7 => "h",
+                            _ => "",
+                        };
+                        move += (8 - y).ToString();
+                        res.Add(startingPos.ElementAt(i) + move);
+                    }
+                }
+            }
+            return res.ToArray();
+        }
+
+        public string[] GetMovablePieces(Side side)
+        {
+            List<string> res = new List<string>();
+            ulong[] fileMasks = new ulong[]
+            {
+                Masks.MASKFILEA,
+                Masks.MASKFILEB,
+                Masks.MASKFILEC,
+                Masks.MASKFILED,
+                Masks.MASKFILEE,
+                Masks.MASKFILEF,
+                Masks.MASKFILEG,
+                Masks.MASKFILEH,
+            };
+            ulong[] rankMasks = new ulong[]
+            {
+                Masks.MASKRANK8,
+                Masks.MASKRANK7,
+                Masks.MASKRANK6,
+                Masks.MASKRANK5,
+                Masks.MASKRANK4,
+                Masks.MASKRANK3,
+                Masks.MASKRANK2,
+                Masks.MASKRANK1,
+            };
+            for (int i = 0; i < 6; ++i)
+            {
+                Piece piece = i switch
+                {
+                    0 => (side == Side.WHITE) ? Piece.WHITEPAWN : Piece.BLACKPAWN,
+                    1 => Piece.ROOK,
+                    2 => Piece.KNIGHT,
+                    3 => Piece.BISHOP,
+                    4 => Piece.QUEEN,
+                    5 => Piece.KING,
+                    _ => 0,
+                };
+                ulong piecePos = i switch
+                {
+                    0 => (side == Side.WHITE) ? WhitePawns : BlackPawns,
+                    1 => (side == Side.WHITE) ? WhiteRooks : BlackRooks,
+                    2 => (side == Side.WHITE) ? WhiteKnights : BlackKnights,
+                    3 => (side == Side.WHITE) ? WhiteBishops : BlackBishops,
+                    4 => (side == Side.WHITE) ? WhiteQueen : BlackQueen,
+                    5 => (side == Side.WHITE) ? WhiteKing : BlackKing,
+                    _ => 0,
+                };
+                ulong mask = GetMovementMask(piece, (side == Side.WHITE) ? WhitePieces : BlackPieces, piecePos);
+                int x, y;
+                for(int j = 0; j < 64; ++j)
+                {
+                    x = j / 8;
+                    y = j % 8;
+                    if ((mask & fileMasks[x] & rankMasks[y]) != 0)
+                    {
+                        res.Add(piece switch{
+                            Piece.BLACKPAWN => "P",
+                            Piece.WHITEPAWN => "P",
+                            Piece.ROOK => "R",
+                            Piece.BISHOP => "B",
+                            Piece.KNIGHT => "N",
+                            Piece.QUEEN => "Q",
+                            Piece.KING => "K",
+                            _ => "-"
+                        });
+                        break;
+                    }
+                }
+            }
+            return res.ToArray();
         }
 
         public ulong GetMovementMask(Piece p, ulong OwnPieces, ulong pos)
@@ -198,14 +385,14 @@ namespace Ca38Bot.Board
                     ulong c2 = Masks.CLEARFILEA;
                     ulong c3 = Masks.CLEARFILEH;
                     ulong c4 = Masks.CLEARFILEH & Masks.CLEARFILEG;
-                    s1 = (pos & c1) << 6;
-                    s2 = (pos & c2) << 15;
-                    s3 = (pos & c3) << 17;
-                    s4 = (pos & c4) << 10;
-                    s5 = (pos & c4) >> 6;
-                    s6 = (pos & c3) >> 15;
-                    s7 = (pos & c2) >> 17;
-                    s8 = (pos & c1) >> 10;
+                    s1 = (pos & c1) << 10;
+                    s2 = (pos & c2) << 17;
+                    s3 = (pos & c3) << 15;
+                    s4 = (pos & c4) << 6;
+                    s5 = (pos & c4) >> 10;
+                    s6 = (pos & c3) >> 17;
+                    s7 = (pos & c2) >> 15;
+                    s8 = (pos & c1) >> 6;
                     res = (s1 | s2 | s3 | s4 | s5 | s6 |s7 | s8) & ~OwnPieces;
                     break;
                 case Piece.WHITEPAWN:
@@ -238,5 +425,80 @@ namespace Ca38Bot.Board
             return res;
         }
 
+        public void Move(string s1, string s2)
+        {
+            List<string> _fen = new List<string>();
+            string y;
+            char[] subs;
+            StringBuilder builder;
+            foreach (string s in fen.Split("/"))
+            {
+                builder = new StringBuilder(s);
+                builder.Replace("1", "s");
+                builder.Replace("2", "ss");
+                builder.Replace("3", "sss");
+                builder.Replace("4", "ssss");
+                builder.Replace("5", "sssss");
+                builder.Replace("6", "ssssss");
+                builder.Replace("7", "sssssss");
+                builder.Replace("8", "ssssssss");
+
+                y = builder.ToString();
+                _fen.Add(y);
+            }
+            int x1 = s1[0] switch
+            {
+                'a' => 0,
+                'b' => 1,
+                'c' => 2,
+                'd' => 3,
+                'e' => 4,
+                'f' => 5,
+                'g' => 6,
+                'h' => 7,
+                _ => 0,
+            }; ;
+            Int32.TryParse(s1[1].ToString(), out int y1);
+            y1 = 8 - y1;
+            int x2 = s2[0] switch
+            {
+                'a' => 0,
+                'b' => 1,
+                'c' => 2,
+                'd' => 3,
+                'e' => 4,
+                'f' => 5,
+                'g' => 6,
+                'h' => 7,
+                _ => 0,
+            }; ;
+            Int32.TryParse(s2[1].ToString(), out int y2);
+            y2 = 8 - y2;
+            char oldPiece = _fen[y1].ElementAt(x1);
+            subs = _fen[y1].ToCharArray();
+            subs[x1] = 's';
+            _fen[y1] = String.Join("", subs);
+            subs = _fen[y2].ToCharArray();
+            subs[x2] = oldPiece;
+            _fen[y2] = String.Join("", subs);
+            string tmp = "";
+            foreach (string s in _fen)
+            {
+                builder = new StringBuilder(s);
+                builder.Replace("ssssssss", "8");
+                builder.Replace("sssssss", "7");
+                builder.Replace("ssssss", "6");
+                builder.Replace("sssss", "5");
+                builder.Replace("ssss", "4");
+                builder.Replace("sss", "3");
+                builder.Replace("ss", "2");
+                builder.Replace("s", "1");
+                string t = builder.ToString();
+                tmp += t;
+                tmp += "/";
+            }
+            string res = tmp.Remove(tmp.Length - 1, 1);
+            this.fen = res;
+        }
     }
 }
