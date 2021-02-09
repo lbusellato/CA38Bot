@@ -73,3 +73,5 @@ C:\Users\loren\Documents\GitHub\Ca38Bot\Ca38Bot\bin\Debug\netcoreapp3.1\runtimes
 C:\Users\loren\Documents\GitHub\Ca38Bot\Ca38Bot\obj\Debug\netcoreapp3.1\Ca38Bot.Migrations.InitialCreate.resources
 C:\Users\loren\Documents\GitHub\Ca38Bot\Ca38Bot\obj\Debug\netcoreapp3.1\Ca38Bot.csproj.GenerateResource.cache
 C:\Users\loren\Documents\GitHub\Ca38Bot\Ca38Bot\obj\Debug\netcoreapp3.1\Ca38Bot.Migrations.ChatIDField.resources
+C:\Users\loren\Documents\GitHub\Ca38Bot\Ca38Bot\obj\Debug\netcoreapp3.1\Ca38Bot.Migrations.MMInitField.resources
+C:\Users\loren\Documents\GitHub\Ca38Bot\Ca38Bot\obj\Debug\netcoreapp3.1\Ca38Bot.Migrations.GameHistoryField.resources

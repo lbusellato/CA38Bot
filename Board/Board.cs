@@ -1,28 +1,15 @@
 ﻿using System;
+using System.Drawing;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.IO;
+using Ca38Bot.DAL;
 
 namespace Ca38Bot.Board
 {
     public class Chessboard
     {
-        /* SIDES */
-        public enum Side
-        {
-            WHITE,
-            BLACK,
-        }
-        /* PIECES */
-        public enum Piece{
-            WHITEPAWN,
-            BLACKPAWN,
-            ROOK,
-            BISHOP,
-            KNIGHT,
-            KING,
-            QUEEN
-        }
         /* WHITE PIECES */
         public ulong WhitePawns;
         public ulong WhiteRooks;
@@ -44,10 +31,32 @@ namespace Ca38Bot.Board
         public ulong BlackPieces;
         public ulong AllPieces;
 
+        public bool player;
+
         public string fen;
+
+        public string[] coords = new string[64]
+        {
+            "h1", "g1", "f1", "e1", "d1", "c1", "b1", "a1",
+            "h2", "g2", "f2", "e2", "d2", "c2", "b2", "a2",
+            "h3", "g3", "f3", "e3", "d3", "c3", "b3", "a3",
+            "h4", "g4", "f4", "e4", "d4", "c4", "b4", "a4",
+            "h5", "g5", "f5", "e5", "d5", "c5", "b5", "a5",
+            "h6", "g6", "f6", "e6", "d6", "c6", "b6", "a6",
+            "h7", "g7", "f7", "e7", "d7", "c7", "b7", "a7",
+            "h8", "g8", "f8", "e8", "d8", "c8", "b8", "a8"
+        };
+        public string[] pieceNames = new string[6]
+        {
+            "P", "R", "B", "N", "Q", "K"
+        };
+
+        private MagicMoves mm = new MagicMoves();
 
         public Chessboard() 
         {
+            player = true;
+
             WhitePawns = Masks.WHITEPAWNS;
             WhiteRooks = Masks.WHITEROOKS;
             WhiteBishops = Masks.WHITEBISHOPS;
@@ -67,10 +76,13 @@ namespace Ca38Bot.Board
             AllPieces = WhitePieces | BlackPieces;
 
             fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR";
+
+            mm.Init();
         }
 
         public void LoadFEN(string fen)
         {
+            player = (fen[^1] == 'p') ? true : false;
             string[] subs = fen[0..^2].Split("/");
             string board = String.Join("", subs);
             string bb;
@@ -159,9 +171,68 @@ namespace Ca38Bot.Board
             this.fen = fen;
         }
 
-        public void FENToPng()
+        public MemoryStream FENToPng()
         {
+            string _fencpy = "";
+            string _fen = "";
+            string tmp;
+            StringBuilder builder;
+            foreach (string s in fen[0..^2].Split("/"))
+            {
+                builder = new StringBuilder(s);
+                builder.Replace("1", "s");
+                builder.Replace("2", "ss");
+                builder.Replace("3", "sss");
+                builder.Replace("4", "ssss");
+                builder.Replace("5", "sssss");
+                builder.Replace("6", "ssssss");
+                builder.Replace("7", "sssssss");
+                builder.Replace("8", "ssssssss");
 
+                tmp = builder.ToString();
+                _fencpy += tmp;
+            }
+            if(!player)
+            {
+                for(int i = _fencpy.Length - 1; i >= 0; --i)
+                {
+                    _fen += _fencpy[i].ToString();
+                }
+            }
+            var stream = new MemoryStream();
+            using var board = (player) ? new Bitmap("board.png") : new Bitmap("boardrev.png");
+            using (var pieces = new Bitmap("pieces.png"))
+            using (var gr = Graphics.FromImage(board))
+            {
+                for (int j = 0; j < _fen.Length; ++j)
+                {
+                    if (_fen[j] != 's' && !Char.IsDigit(_fen[j]))
+                    {
+                        using var p = _fen[j] switch
+                        {
+                            'k' => pieces.Clone(new Rectangle(0, 0, 100, 100), System.Drawing.Imaging.PixelFormat.Format32bppPArgb),
+                            'K' => pieces.Clone(new Rectangle(0, 100, 100, 100), System.Drawing.Imaging.PixelFormat.Format32bppPArgb),
+                            'q' => pieces.Clone(new Rectangle(100, 0, 100, 100), System.Drawing.Imaging.PixelFormat.Format32bppPArgb),
+                            'Q' => pieces.Clone(new Rectangle(100, 100, 100, 100), System.Drawing.Imaging.PixelFormat.Format32bppPArgb),
+                            'r' => pieces.Clone(new Rectangle(200, 0, 100, 100), System.Drawing.Imaging.PixelFormat.Format32bppPArgb),
+                            'R' => pieces.Clone(new Rectangle(200, 100, 100, 100), System.Drawing.Imaging.PixelFormat.Format32bppPArgb),
+                            'b' => pieces.Clone(new Rectangle(300, 0, 100, 100), System.Drawing.Imaging.PixelFormat.Format32bppPArgb),
+                            'B' => pieces.Clone(new Rectangle(300, 100, 100, 100), System.Drawing.Imaging.PixelFormat.Format32bppPArgb),
+                            'n' => pieces.Clone(new Rectangle(400, 0, 100, 100), System.Drawing.Imaging.PixelFormat.Format32bppPArgb),
+                            'N' => pieces.Clone(new Rectangle(400, 100, 100, 100), System.Drawing.Imaging.PixelFormat.Format32bppPArgb),
+                            'p' => pieces.Clone(new Rectangle(500, 0, 100, 100), System.Drawing.Imaging.PixelFormat.Format32bppPArgb),
+                            'P' => pieces.Clone(new Rectangle(500, 100, 100, 100), System.Drawing.Imaging.PixelFormat.Format32bppPArgb),
+                            _ => pieces.Clone(new Rectangle(0, 0, 100, 100), System.Drawing.Imaging.PixelFormat.Format32bppPArgb),
+                        };
+                        int x = j % 8;
+                        int y = j / 8;
+                        gr.DrawImage(p, 50 + x * 100, 50 + y * 100);
+                    }
+                }
+            }
+            board.Save(stream, System.Drawing.Imaging.ImageFormat.Png);
+            stream.Position = 0;
+            return stream;
         }
 
         private ulong Convert(string input)
@@ -179,248 +250,110 @@ namespace Ca38Bot.Board
             return res;
         }
 
-        public string[] GetValidMoves(Side side, Piece piece)
+        public List<Tuple<string, string, string, bool, string>> GetValidMoves(Side side, Piece piece)
         {
-            string move;
-            List<string> res = new List<string>();
-            ulong[] fileMasks = new ulong[]
-            {
-                Masks.MASKFILEA,
-                Masks.MASKFILEB,
-                Masks.MASKFILEC,
-                Masks.MASKFILED,
-                Masks.MASKFILEE,
-                Masks.MASKFILEF,
-                Masks.MASKFILEG,
-                Masks.MASKFILEH,
-            };
-            ulong[] rankMasks = new ulong[]
-            {
-                Masks.MASKRANK8,
-                Masks.MASKRANK7,
-                Masks.MASKRANK6,
-                Masks.MASKRANK5,
-                Masks.MASKRANK4,
-                Masks.MASKRANK3,
-                Masks.MASKRANK2,
-                Masks.MASKRANK1,
-            };
-            ulong piecePos = piece switch
+            List<Tuple<string, string, string, bool, string>> moves = new List<Tuple<string, string, string, bool, string>>();
+            ulong bb = piece switch
             {
                 Piece.WHITEPAWN => WhitePawns,
                 Piece.BLACKPAWN => BlackPawns,
                 Piece.ROOK => (side == Side.WHITE) ? WhiteRooks : BlackRooks,
-                Piece.KNIGHT => (side == Side.WHITE) ? WhiteKnights : BlackKnights,
                 Piece.BISHOP => (side == Side.WHITE) ? WhiteBishops : BlackBishops,
+                Piece.KNIGHT => (side == Side.WHITE) ? WhiteKnights : BlackKnights,
                 Piece.QUEEN => (side == Side.WHITE) ? WhiteQueen : BlackQueen,
                 Piece.KING => (side == Side.WHITE) ? WhiteKing : BlackKing,
-                _ => 0,
+                _ => 0
             };
-
-            List<ulong> startingMask = new List<ulong>();
-            List<string> startingPos = new List<string>();
-            int x, y;
-            for (int j = 0; j < 64; ++j)
+            int[] squares = mm.GetUniqueSquares(bb);
+            for (int k = 0; k < squares.Length; ++k)
             {
-                move = "";
-                x = j / 8;
-                y = j % 8;
-                if ((piecePos & fileMasks[x] & rankMasks[y]) != 0)
+                ulong movebb = mm.GetMoves(this, side, piece, squares[k]);
+                if (movebb != 0)
                 {
-                    move += x switch
+                    int[] destSquares = mm.GetUniqueSquares(movebb);
+                    for(int j = 0; j < destSquares.Length; ++j)
                     {
-                        0 => "a",
-                        1 => "b",
-                        2 => "c",
-                        3 => "d",
-                        4 => "e",
-                        5 => "f",
-                        6 => "g",
-                        7 => "h",
-                        _ => "",
-                    };
-                    move += (8 - y).ToString();
-                    startingPos.Add(move);
-                    startingMask.Add(piecePos & fileMasks[x] & rankMasks[y]);
-                }
-            }
-            ulong mask;
-            for (int i = 0; i < startingMask.Count(); ++i)
-            {
-                mask = GetMovementMask(piece, (side == Side.WHITE) ? WhitePieces : BlackPieces, startingMask.ElementAt(i));
-                for (int j = 0; j < 64; ++j)
-                {
-                    move = "";
-                    x = j / 8;
-                    y = j % 8;
-                    if ((mask & fileMasks[x] & rankMasks[y]) != 0)
-                    {
-                        move += x switch
+                        if(piece != Piece.BLACKPAWN && piece != Piece.WHITEPAWN)
                         {
-                            0 => "a",
-                            1 => "b",
-                            2 => "c",
-                            3 => "d",
-                            4 => "e",
-                            5 => "f",
-                            6 => "g",
-                            7 => "h",
-                            _ => "",
-                        };
-                        move += (8 - y).ToString();
-                        res.Add(startingPos.ElementAt(i) + move);
+                            string pieceName = piece switch
+                            {
+                                Piece.KNIGHT => "N",
+                                Piece.BISHOP => "B",
+                                Piece.KING => "K",
+                                Piece.QUEEN => "Q",
+                                Piece.ROOK => "R",
+                                _ => ""
+                            };
+                            moves.Add(new Tuple<string, string, string, bool, string>(
+                                pieceName,
+                                coords[squares[k]],
+                                coords[destSquares[j]],
+                                IsOccupied(coords[destSquares[j]]),
+                                "")
+                                );
+                        }
+                        else
+                        {
+                            moves.Add(new Tuple<string, string, string, bool, string>(
+                                "",
+                                coords[squares[k]],
+                                coords[destSquares[j]],
+                                IsOccupied(coords[destSquares[j]]),
+                                "")
+                                );
+                        }
                     }
                 }
             }
-            return res.ToArray();
+
+            return moves;
         }
 
-        public string[] GetMovablePieces(Side side)
+        public bool IsOccupied(string square)
         {
-            List<string> res = new List<string>();
-            ulong[] fileMasks = new ulong[]
+            int index = 0;
+            for(index = 0; index < coords.Length; ++index)
             {
-                Masks.MASKFILEA,
-                Masks.MASKFILEB,
-                Masks.MASKFILEC,
-                Masks.MASKFILED,
-                Masks.MASKFILEE,
-                Masks.MASKFILEF,
-                Masks.MASKFILEG,
-                Masks.MASKFILEH,
-            };
-            ulong[] rankMasks = new ulong[]
+                if (square == coords[index]) break;
+            }
+            return (AllPieces & (1UL << index)) > 0;
+        }
+
+        public List<Tuple<string, string, string, bool, string>> GetMovablePieces(Side side)
+        {
+            List<Tuple<string, string, string, bool, string>> res = new List<Tuple<string, string, string, bool, string>>();
+            for(int j = 0; j < 6; ++j)
             {
-                Masks.MASKRANK8,
-                Masks.MASKRANK7,
-                Masks.MASKRANK6,
-                Masks.MASKRANK5,
-                Masks.MASKRANK4,
-                Masks.MASKRANK3,
-                Masks.MASKRANK2,
-                Masks.MASKRANK1,
-            };
-            for (int i = 0; i < 6; ++i)
-            {
-                Piece piece = i switch
+                Piece p = j switch
                 {
                     0 => (side == Side.WHITE) ? Piece.WHITEPAWN : Piece.BLACKPAWN,
                     1 => Piece.ROOK,
-                    2 => Piece.KNIGHT,
-                    3 => Piece.BISHOP,
+                    2 => Piece.BISHOP,
+                    3 => Piece.KNIGHT,
                     4 => Piece.QUEEN,
                     5 => Piece.KING,
-                    _ => 0,
+                    _ => 0
                 };
-                ulong piecePos = i switch
+                ulong bb = p switch
                 {
-                    0 => (side == Side.WHITE) ? WhitePawns : BlackPawns,
-                    1 => (side == Side.WHITE) ? WhiteRooks : BlackRooks,
-                    2 => (side == Side.WHITE) ? WhiteKnights : BlackKnights,
-                    3 => (side == Side.WHITE) ? WhiteBishops : BlackBishops,
-                    4 => (side == Side.WHITE) ? WhiteQueen : BlackQueen,
-                    5 => (side == Side.WHITE) ? WhiteKing : BlackKing,
-                    _ => 0,
+                    Piece.WHITEPAWN => WhitePawns,
+                    Piece.BLACKPAWN => BlackPawns,
+                    Piece.ROOK => (side == Side.WHITE) ? WhiteRooks : BlackRooks,
+                    Piece.BISHOP => (side == Side.WHITE) ? WhiteBishops : BlackBishops,
+                    Piece.KNIGHT => (side == Side.WHITE) ? WhiteKnights : BlackKnights,
+                    Piece.QUEEN => (side == Side.WHITE) ? WhiteQueen : BlackQueen,
+                    Piece.KING => (side == Side.WHITE) ? WhiteKing : BlackKing,
+                    _ => 0
                 };
-                ulong mask = GetMovementMask(piece, (side == Side.WHITE) ? WhitePieces : BlackPieces, piecePos);
-                int x, y;
-                for(int j = 0; j < 64; ++j)
+                int[] squares = mm.GetUniqueSquares(bb);
+                for (int k = 0; k < squares.Length; ++k) 
                 {
-                    x = j / 8;
-                    y = j % 8;
-                    if ((mask & fileMasks[x] & rankMasks[y]) != 0)
+                    if(mm.GetMoves(this, side, p, squares[k]) != 0)
                     {
-                        res.Add(piece switch{
-                            Piece.BLACKPAWN => "P",
-                            Piece.WHITEPAWN => "P",
-                            Piece.ROOK => "R",
-                            Piece.BISHOP => "B",
-                            Piece.KNIGHT => "N",
-                            Piece.QUEEN => "Q",
-                            Piece.KING => "K",
-                            _ => "-"
-                        });
+                        res.Add(new Tuple<string, string, string, bool, string>(pieceNames[j], "", "", false, ""));
                         break;
                     }
                 }
-            }
-            return res.ToArray();
-        }
-
-        public ulong GetMovementMask(Piece p, ulong OwnPieces, ulong pos)
-        {
-            ulong res = 0;
-            ulong s1;
-            ulong s2;
-            ulong s3;
-            ulong s4;
-            ulong s5;
-            ulong s6;
-            ulong s7;
-            ulong s8;
-            ulong p1;
-            ulong p2;
-            ulong a1;
-            ulong a2;
-            ulong a;
-            switch (p)
-            {
-                case Piece.KING:
-                    // These are used to solve under/over flows in the position (eg if the king is on the a or h file)
-                    // by removing the king from them (obtaining an empty bitboard with the shifts, and thus an invalid movement)
-                    ulong posAmask = pos & Masks.CLEARFILEA;
-                    ulong posHmask = pos & Masks.CLEARFILEH;
-                    s1 = pos << 8;
-                    s2 = posHmask << 7;
-                    s3 = posHmask >> 1;
-                    s4 = posHmask >> 9;
-                    s5 = pos >> 8;
-                    s6 = posAmask >> 7;
-                    s7 = posAmask << 1;
-                    s8 = posAmask << 9;
-                    res = (s1 | s2 | s3 | s4 | s5 | s6 | s7 | s8) & ~OwnPieces;
-                    break;
-                case Piece.KNIGHT:
-                    ulong c1 = Masks.CLEARFILEA & Masks.CLEARFILEB; 
-                    ulong c2 = Masks.CLEARFILEA;
-                    ulong c3 = Masks.CLEARFILEH;
-                    ulong c4 = Masks.CLEARFILEH & Masks.CLEARFILEG;
-                    s1 = (pos & c1) << 10;
-                    s2 = (pos & c2) << 17;
-                    s3 = (pos & c3) << 15;
-                    s4 = (pos & c4) << 6;
-                    s5 = (pos & c4) >> 10;
-                    s6 = (pos & c3) >> 17;
-                    s7 = (pos & c2) >> 15;
-                    s8 = (pos & c1) >> 6;
-                    res = (s1 | s2 | s3 | s4 | s5 | s6 |s7 | s8) & ~OwnPieces;
-                    break;
-                case Piece.WHITEPAWN:
-                    //Check if the pawn can move up one step
-                    p1 = (pos << 8) & ~AllPieces;
-                    //Check if the pawn can double move
-                    p2 = ((p1 & Masks.MASKRANK3) << 8) & ~AllPieces;
-                    //Check both diagonals in case the pawn can attack there, minding the overflow on the a and h files
-                    a1 = (pos & Masks.CLEARFILEA) << 7;
-                    a2 = (pos & Masks.CLEARFILEH) << 9;
-                    //Join both attack routes and check if there's a piece to attack on them
-                    a = (a1 | a2) & BlackPieces;
-                    res = p1 | p2 | a;
-                    break;
-                case Piece.BLACKPAWN:
-                    //Check if the pawn can move down one step
-                    p1 = (pos >> 8) & ~AllPieces;
-                    //Check if the pawn can double move
-                    p2 = ((p1 & Masks.MASKRANK6) >> 8) & ~AllPieces;
-                    //Check both diagonals in case the pawn can attack there, minding the overflow on the a and h files
-                    a1 = (pos & Masks.CLEARFILEA) >> 7;
-                    a2 = (pos & Masks.CLEARFILEH) >> 9;
-                    //Join both attack routes and check if there's a piece to attack on them
-                    a = (a1 | a2) & WhitePieces;
-                    res = p1 | p2 | a;
-                    break;
-                default:
-                    break;
             }
             return res;
         }

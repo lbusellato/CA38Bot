@@ -48,6 +48,10 @@
               "target": "Package",
               "version": "[5.0.2, )"
             },
+            "System.Drawing.Common": {
+              "target": "Package",
+              "version": "[5.0.0, )"
+            },
             "Telegram.Bot": {
               "target": "Package",
               "version": "[15.7.1, )"
