@@ -5,7 +5,7 @@ namespace Ca38Bot.Board
 {
     public class Move
     {
-        public string[] Coords = new string[64]
+        public static string[] Coords = new string[64]
         {
             "h1", "g1", "f1", "e1", "d1", "c1", "b1", "a1",
             "h2", "g2", "f2", "e2", "d2", "c2", "b2", "a2",
@@ -73,6 +73,11 @@ namespace Ca38Bot.Board
             get { return Coords[(int)((m & fromMask) >> 6)]; }
             set { }
         }
+        public string Captures
+        {
+            get { return ((m & captureMask) >> 19) > 0 ? "x" : ""; }
+            set { }
+        }
 
         public string Piece
         {
@@ -86,23 +91,17 @@ namespace Ca38Bot.Board
             m |= (uint)(promotion << 12);
             m |= (uint)(special << 14);
             m |= (uint)(piece << 16);
-            m |= (uint)(capture << 17);
+            m |= (uint)(capture << 19);
         }
 
-        int BinSearch(string[] o, int l, int r, string t)
+        public static int GetSquareIndex(string target)
         {
-            int p = (r - l) / 2;
-            if (o[p] == t) return p;
-            else if (String.Compare(o[p], t) < 0) return BinSearch(o, p + 1, r, t);
-            else if (String.Compare(o[p], t) > 0) return BinSearch(o, l, p - 1, t);
-            else return -1;
+            for(int i = 0; i < 64; ++i)
+            {
+                if (Coords[i] == target)
+                    return i;
+            }
+            return -1;
         }
-
-        public int GetSquareIndex(string target)
-        {
-            return BinSearch(Coords, 0, 63, target);
-        }
-
-
     }
 }

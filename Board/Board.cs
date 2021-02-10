@@ -279,13 +279,23 @@ namespace Ca38Bot.Board
                     int[] destSquares = mm.GetUniqueSquares(movebb);
                     for(int j = 0; j < destSquares.Length; ++j)
                     {
+                        string destSquare = coords[destSquares[j]];
+                        ushort capture;
+                        if(IsOccupied(destSquare))
+                        {
+                            capture = 1;
+                        }
+                        else
+                        {
+                            capture = 0;
+                        }
                         moves.Add(new Move(
                             Board.Move.PieceIndex(piece),
                             (ushort)destSquares[j],
                             (ushort)squares[k],
                             0,
                             0,
-                            0)
+                            capture)
                         );
                     }
                 }
@@ -300,7 +310,7 @@ namespace Ca38Bot.Board
             {
                 if (square == coords[index]) break;
             }
-            return (AllPieces & (1UL << index)) > 0;
+            return ((AllPieces & (1UL << index)) > 0);
         }
 
         public List<Move> GetMovablePieces(Side side)
@@ -342,8 +352,10 @@ namespace Ca38Bot.Board
             return res;
         }
 
-        public void Move(string s1, string s2)
+        public void Move(Move m)
         {
+            string from = m.From;
+            string to = m.To;
             List<string> _fen = new List<string>();
             string y;
             char[] subs;
@@ -363,7 +375,7 @@ namespace Ca38Bot.Board
                 y = builder.ToString();
                 _fen.Add(y);
             }
-            int x1 = s1[0] switch
+            int x1 = from[0] switch
             {
                 'a' => 0,
                 'b' => 1,
@@ -375,9 +387,9 @@ namespace Ca38Bot.Board
                 'h' => 7,
                 _ => 0,
             }; ;
-            Int32.TryParse(s1[1].ToString(), out int y1);
+            Int32.TryParse(from[1].ToString(), out int y1);
             y1 = 8 - y1;
-            int x2 = s2[0] switch
+            int x2 = to[0] switch
             {
                 'a' => 0,
                 'b' => 1,
@@ -389,7 +401,7 @@ namespace Ca38Bot.Board
                 'h' => 7,
                 _ => 0,
             }; ;
-            Int32.TryParse(s2[1].ToString(), out int y2);
+            Int32.TryParse(to[1].ToString(), out int y2);
             y2 = 8 - y2;
             char oldPiece = _fen[y1].ElementAt(x1);
             subs = _fen[y1].ToCharArray();
@@ -415,7 +427,8 @@ namespace Ca38Bot.Board
                 tmp += "/";
             }
             string res = tmp.Remove(tmp.Length - 1, 1);
-            this.fen = res;
+            fen = res;
+            this.LoadFEN(fen);
         }
     }
 }

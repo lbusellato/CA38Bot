@@ -1,5 +1,6 @@
 ﻿using Ca38Bot.Board;
 using Ca38Bot.DAL;
+using Ca38Bot.Models;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -9,7 +10,6 @@ using Telegram.Bot;
 using Telegram.Bot.Args;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
-using Telegram.Bot.Types.InlineQueryResults;
 using Telegram.Bot.Types.InputFiles;
 using Telegram.Bot.Types.ReplyMarkups;
 
@@ -45,9 +45,6 @@ namespace Ca38Bot
             Bot.OnMessage += BotOnMessageReceived;
             Bot.OnMessageEdited += BotOnMessageReceived;
             Bot.OnCallbackQuery += BotOnCallbackQueryReceived;
-            Bot.OnInlineQuery += BotOnInlineQueryReceived;
-            Bot.OnInlineResultChosen += BotOnChosenInlineResultReceived;
-            Bot.OnReceiveError += BotOnReceiveError;
 
             Bot.StartReceiving(Array.Empty<UpdateType>());
             Console.WriteLine($"Start listening for @{me.Username}");
@@ -98,6 +95,14 @@ namespace Ca38Bot
                         parseMode: ParseMode.Html
                     );
                     break;
+                case "/reset":
+                    Games g = db.Games.SingleOrDefault(g => g.ChatID == messageEventArgs.Message.Chat.Id);
+                    if (g != null)
+                    {
+                        db.Games.Remove(g);
+                        db.SaveChanges();
+                    }
+                    break;
                 default:
                     break;
             }
@@ -105,6 +110,7 @@ namespace Ca38Bot
 
         // Send inline keyboard
         // You can process responses in BotOnCallbackQueryReceived handler
+        static Message prevBoard = null;
         static async Task SendInlineKeyboard(Message message, List<Move> keys)
         {
             using GamesDbContext db = new GamesDbContext();
@@ -122,6 +128,81 @@ namespace Ca38Bot
                         InlineKeyboardButton.WithCallbackData("Nero", "b"),
                 });
             }
+            else
+            {
+                if(prevBoard != null)
+                {
+                    await Bot.DeleteMessageAsync(
+                        chatId: prevBoard.Chat.Id,
+                        messageId: prevBoard.MessageId
+                    );
+                }
+                await Bot.DeleteMessageAsync(
+                    chatId: message.Chat.Id,
+                    messageId: message.MessageId
+                ); 
+                var file = new InputOnlineFile(board.FENToPng());
+                prevBoard = await Bot.SendPhotoAsync(
+                    chatId: message.Chat.Id,
+                    photo: file
+                    );
+                res = "Tocca a te";
+                List<InlineKeyboardButton> keyList = new List<InlineKeyboardButton>();
+                List<List<InlineKeyboardButton>> keyListList = new List<List<InlineKeyboardButton>>();
+                int count = 0;
+                int j = 0;
+                string duplicate;
+                foreach (Move m in keys)
+                {
+                    duplicate = "";
+                    if (m.From != m.To)
+                    {
+                        for (int i = 0; i < keys.Count(); ++i)
+                        {
+                            if (i == j) continue;
+                            if (m.To == keys.ElementAt(i).To)
+                            {
+                                if (m.From[0] == keys.ElementAt(i).From[0])
+                                {
+                                    duplicate = m.From[1].ToString();
+                                }
+                                else if (m.From[1] == keys.ElementAt(i).From[1])
+                                {
+                                    duplicate = m.From[0].ToString();
+                                }
+                                else 
+                                {
+                                    duplicate = m.From[0].ToString();
+                                }
+                            }
+                        }
+                    }
+                    j++;
+                    string text = (m.From == m.To) ? m.Piece : (m.Piece != "P" ? m.Piece : "") + duplicate + m.Captures + m.To;
+                    string callbackData = (m.From == m.To) ? m.Piece : m.From + m.To;
+                    keyList.Add(InlineKeyboardButton.WithCallbackData(text, callbackData));
+                    count++;
+                    if(count > 5)
+                    {
+                        keyListList.Add(keyList);
+                        keyList = new List<InlineKeyboardButton>();
+                        count = 0;
+                    }
+                }
+                keyListList.Add(keyList);
+                if (keyListList.Count() == 0)
+                {
+                    inlineKeyboard = new InlineKeyboardMarkup(InlineKeyboardButton.WithCallbackData("Something went wrong", "-"));
+                }
+                else
+                {
+                    if (keys.ElementAt(0).From != keys.ElementAt(0).To)
+                    {
+                        keyListList.Add(new List<InlineKeyboardButton>() { InlineKeyboardButton.WithCallbackData("Indietro", "Back")});
+                    }
+                    inlineKeyboard = new InlineKeyboardMarkup(keyListList);
+                }
+            }
             await Bot.SendTextMessageAsync(
                 chatId: message.Chat.Id,
                 text: res,
@@ -129,51 +210,60 @@ namespace Ca38Bot
             );
         }
 
-        private static Piece p;
         // Process Inline Keyboard callback data
         private static async void BotOnCallbackQueryReceived(object sender, CallbackQueryEventArgs callbackQueryEventArgs)
         {
             using GamesDbContext db = new GamesDbContext();
+
             var callbackQuery = callbackQueryEventArgs.CallbackQuery;
-        }
 
-        #region Inline Mode
+            List<Move> keys = new List<Move>();
 
-        private static async void BotOnInlineQueryReceived(object sender, InlineQueryEventArgs inlineQueryEventArgs)
-        {
-            Console.WriteLine($"Received inline query from: {inlineQueryEventArgs.InlineQuery.From.Id}");
+            if (db.Games.SingleOrDefault(g => g.ChatID == callbackQuery.Message.Chat.Id) != null)
+            {
+                if (db.Games.SingleOrDefault(g => g.ChatID == callbackQuery.Message.Chat.Id).BotGame == null)
+                {
+                    string fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR";
+                    string first = callbackQuery.Data switch
+                    {
+                        "w" => "/p",
+                        "r" => (rng.Next(0, 2) == 0) ? "/p" : "/b",
+                        "b" => "/b",
+                        _ => "/p"
+                    };
+                    fen += first;
+                    db.Games.SingleOrDefault(g => g.ChatID == callbackQuery.Message.Chat.Id).BotGame = fen;
+                    db.SaveChanges();
+                    board.LoadFEN(fen);
 
-            InlineQueryResultBase[] results = {
-            // displayed result
-            new InlineQueryResultArticle(
-                id: "3",
-                title: "TgBots",
-                inputMessageContent: new InputTextMessageContent(
-                    "hello"
-                )
-            )
-        };
-            await Bot.AnswerInlineQueryAsync(
-                inlineQueryId: inlineQueryEventArgs.InlineQuery.Id,
-                results: results,
-                isPersonal: true,
-                cacheTime: 0
-            );
-        }
-
-        private static void BotOnChosenInlineResultReceived(object sender, ChosenInlineResultEventArgs chosenInlineResultEventArgs)
-        {
-            Console.WriteLine($"Received inline result: {chosenInlineResultEventArgs.ChosenInlineResult.ResultId}");
-        }
-
-        #endregion
-
-        private static void BotOnReceiveError(object sender, ReceiveErrorEventArgs receiveErrorEventArgs)
-        {
-            Console.WriteLine("Received error: {0} — {1}",
-                receiveErrorEventArgs.ApiRequestException.ErrorCode,
-                receiveErrorEventArgs.ApiRequestException.Message
-            );
+                    keys = board.GetMovablePieces(Side.WHITE);
+                }
+                else
+                {
+                    keys = callbackQuery.Data switch
+                    {
+                        "Back" => board.GetMovablePieces(Side.WHITE),
+                        "P" => board.GetValidMoves(Side.WHITE, Piece.WHITEPAWN),
+                        "R" => board.GetValidMoves(Side.WHITE, Piece.ROOK),
+                        "N" => board.GetValidMoves(Side.WHITE, Piece.KNIGHT),
+                        "B" => board.GetValidMoves(Side.WHITE, Piece.BISHOP),
+                        "Q" => board.GetValidMoves(Side.WHITE, Piece.QUEEN),
+                        "K" => board.GetValidMoves(Side.WHITE, Piece.KING),
+                        _ => null
+                    };
+                    if(keys == null)
+                    {
+                        ushort from = (ushort)Move.GetSquareIndex(callbackQuery.Data.Substring(0, 2));
+                        ushort to = (ushort)Move.GetSquareIndex(callbackQuery.Data.Substring(2, 2));
+                        board.Move(new Move(0, to, from, 0, 0, 0));
+                        keys = board.GetMovablePieces(Side.WHITE);
+                    }
+                }
+            }
+            if(keys != null)
+            {
+                await SendInlineKeyboard(callbackQuery.Message, keys);
+            }
         }
     }
 }
