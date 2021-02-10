@@ -1,6 +1,4 @@
-﻿
-using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 
 namespace Ca38Bot.Board
 {
@@ -580,7 +578,7 @@ namespace Ca38Bot.Board
         public ulong[,] BishopAttacks = new ulong[64,512];
         public ulong[,] RookAttacks = new ulong[64, 4096];
         /* MAGIC NUMBERS */
-        int[] BishopShift = new int[64] {
+        readonly int[] BishopShift = new int[64] {
             58, 59, 59, 59, 59, 59, 59, 58,
             59, 59, 59, 59, 59, 59, 59, 59,
             59, 59, 57, 57, 57, 57, 57, 59,
@@ -590,7 +588,7 @@ namespace Ca38Bot.Board
             59, 59, 59, 59, 59, 59, 59, 59,
             58, 59, 59, 59, 59, 59, 59, 58
         };
-        int[] RookShift = new int[64] {
+        readonly int[] RookShift = new int[64] {
             52, 53, 53, 53, 53, 53, 53, 52,
             53, 54, 54, 54, 54, 54, 54, 53,
             53, 54, 54, 54, 54, 54, 54, 53,
@@ -600,7 +598,7 @@ namespace Ca38Bot.Board
             53, 54, 54, 54, 54, 54, 54, 53,
             52, 53, 53, 53, 53, 53, 53, 52
         };
-        ulong[] RookMagics = new ulong[64] {
+        readonly ulong[] RookMagics = new ulong[64] {
             0x8a80104000800020,
             0x140002000100040,
             0x2801880a0017001,
@@ -666,7 +664,7 @@ namespace Ca38Bot.Board
             0x2006104900a0804,
             0x1004081002402
         };
-        ulong[] BishopMagics = new ulong[64] {
+        readonly ulong[] BishopMagics = new ulong[64] {
             0x40040844404084,
             0x2004208a004208,
             0x10190041080202,

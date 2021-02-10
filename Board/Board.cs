@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.IO;
-using Ca38Bot.DAL;
 
 namespace Ca38Bot.Board
 {
@@ -46,12 +45,12 @@ namespace Ca38Bot.Board
             "h7", "g7", "f7", "e7", "d7", "c7", "b7", "a7",
             "h8", "g8", "f8", "e8", "d8", "c8", "b8", "a8"
         };
-        public string[] pieceNames = new string[6]
+        public char[] pieceNames = new char[6]
         {
-            "P", "R", "B", "N", "Q", "K"
+            'P', 'R', 'B', 'N', 'Q', 'K'
         };
 
-        private MagicMoves mm = new MagicMoves();
+        readonly private MagicMoves mm = new MagicMoves();
 
         public Chessboard() 
         {
@@ -82,7 +81,7 @@ namespace Ca38Bot.Board
 
         public void LoadFEN(string fen)
         {
-            player = (fen[^1] == 'p') ? true : false;
+            player = (fen[^1] == 'p');
             string[] subs = fen[0..^2].Split("/");
             string board = String.Join("", subs);
             string bb;
@@ -199,6 +198,13 @@ namespace Ca38Bot.Board
                     _fen += _fencpy[i].ToString();
                 }
             }
+            else
+            {
+                for (int i = 0; i < _fencpy.Length; ++i)
+                {
+                    _fen += _fencpy[i].ToString();
+                }
+            }
             var stream = new MemoryStream();
             using var board = (player) ? new Bitmap("board.png") : new Bitmap("boardrev.png");
             using (var pieces = new Bitmap("pieces.png"))
@@ -250,9 +256,9 @@ namespace Ca38Bot.Board
             return res;
         }
 
-        public List<Tuple<string, string, string, bool, string>> GetValidMoves(Side side, Piece piece)
+        public List<Move> GetValidMoves(Side side, Piece piece)
         {
-            List<Tuple<string, string, string, bool, string>> moves = new List<Tuple<string, string, string, bool, string>>();
+            List<Move> moves = new List<Move>();
             ulong bb = piece switch
             {
                 Piece.WHITEPAWN => WhitePawns,
@@ -273,45 +279,23 @@ namespace Ca38Bot.Board
                     int[] destSquares = mm.GetUniqueSquares(movebb);
                     for(int j = 0; j < destSquares.Length; ++j)
                     {
-                        if(piece != Piece.BLACKPAWN && piece != Piece.WHITEPAWN)
-                        {
-                            string pieceName = piece switch
-                            {
-                                Piece.KNIGHT => "N",
-                                Piece.BISHOP => "B",
-                                Piece.KING => "K",
-                                Piece.QUEEN => "Q",
-                                Piece.ROOK => "R",
-                                _ => ""
-                            };
-                            moves.Add(new Tuple<string, string, string, bool, string>(
-                                pieceName,
-                                coords[squares[k]],
-                                coords[destSquares[j]],
-                                IsOccupied(coords[destSquares[j]]),
-                                "")
-                                );
-                        }
-                        else
-                        {
-                            moves.Add(new Tuple<string, string, string, bool, string>(
-                                "",
-                                coords[squares[k]],
-                                coords[destSquares[j]],
-                                IsOccupied(coords[destSquares[j]]),
-                                "")
-                                );
-                        }
+                        moves.Add(new Move(
+                            Board.Move.PieceIndex(piece),
+                            (ushort)destSquares[j],
+                            (ushort)squares[k],
+                            0,
+                            0,
+                            0)
+                        );
                     }
                 }
             }
-
             return moves;
         }
 
         public bool IsOccupied(string square)
         {
-            int index = 0;
+            int index;
             for(index = 0; index < coords.Length; ++index)
             {
                 if (square == coords[index]) break;
@@ -319,9 +303,9 @@ namespace Ca38Bot.Board
             return (AllPieces & (1UL << index)) > 0;
         }
 
-        public List<Tuple<string, string, string, bool, string>> GetMovablePieces(Side side)
+        public List<Move> GetMovablePieces(Side side)
         {
-            List<Tuple<string, string, string, bool, string>> res = new List<Tuple<string, string, string, bool, string>>();
+            List<Move> res = new List<Move>();
             for(int j = 0; j < 6; ++j)
             {
                 Piece p = j switch
@@ -350,7 +334,7 @@ namespace Ca38Bot.Board
                 {
                     if(mm.GetMoves(this, side, p, squares[k]) != 0)
                     {
-                        res.Add(new Tuple<string, string, string, bool, string>(pieceNames[j], "", "", false, ""));
+                        res.Add(new Move(Board.Move.PieceIndex(p), 0, 0, 0, 0, 0));
                         break;
                     }
                 }
