@@ -21,6 +21,7 @@ namespace Ca38Bot.Board
         {
             "P", "R", "N", "B", "Q", "K"
         };
+
         /*
          * MOVE
          * 0b {31-18} {19} {18 17 16} {15 14} {13 12} {11 12 9 8 7 6} {5 4 3 2 1 0}
@@ -44,13 +45,13 @@ namespace Ca38Bot.Board
          * 5-0 destination square 0-63
          * 
          */
-        uint toMask =         0b00000000000000111111;
-        uint fromMask =       0b00000000111111000000;
-        uint promotionMask =  0b00000011000000000000;
-        uint specialMask =    0b00001100000000000000;
-        uint pieceMask =      0b01110000000000000000;
-        uint captureMask =    0b10000000000000000000;
-        uint m = 0;
+        readonly uint toMask =         0b00000000000000111111;
+        readonly uint fromMask =       0b00000000111111000000;
+        //readonly uint promotionMask =  0b00000011000000000000;
+        //readonly uint specialMask =    0b00001100000000000000;
+        readonly uint pieceMask =      0b01110000000000000000;
+        readonly uint captureMask =    0b10000000000000000000;
+        readonly uint m = 0;
 
         public static ushort PieceIndex(Piece piece) => piece switch
         {

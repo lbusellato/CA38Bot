@@ -17,11 +17,11 @@ namespace Ca38Bot
 {
     /* TO DO LIST 
      * 
-     * TODO: Re-implement playing mechanics
      * TODO: Implement en passant
      * TODO: Implement castling
      * TODO: Implement check
      * TODO: Implement checkmate
+     * TODO: Implement resign
      * TODO: Implement threefold repetition
      * TODO: Implement 50 move draw rule
      * 
@@ -70,7 +70,7 @@ namespace Ca38Bot
             {
                 // Send inline keyboard
                 case "/gioca":
-                    await SendInlineKeyboard(message, null);
+                    await SendInlineKeyboard(message, null, null);
                     break;
                 case "/fen":
                     string fen = "";
@@ -110,8 +110,7 @@ namespace Ca38Bot
 
         // Send inline keyboard
         // You can process responses in BotOnCallbackQueryReceived handler
-        static Message prevBoard = null;
-        static async Task SendInlineKeyboard(Message message, List<Move> keys)
+        static async Task SendInlineKeyboard(Message message, List<Move> keys, string botMove)
         {
             using GamesDbContext db = new GamesDbContext();
             await Bot.SendChatActionAsync(message.Chat.Id, ChatAction.Typing);
@@ -130,11 +129,12 @@ namespace Ca38Bot
             }
             else
             {
-                if(prevBoard != null)
+                int prevBoard = db.Games.SingleOrDefault(g => g.ChatID == message.Chat.Id).PrevBoardID;
+                if (prevBoard != 0)
                 {
                     await Bot.DeleteMessageAsync(
-                        chatId: prevBoard.Chat.Id,
-                        messageId: prevBoard.MessageId
+                        chatId: message.Chat.Id,
+                        messageId: prevBoard
                     );
                 }
                 await Bot.DeleteMessageAsync(
@@ -142,11 +142,13 @@ namespace Ca38Bot
                     messageId: message.MessageId
                 ); 
                 var file = new InputOnlineFile(board.FENToPng());
-                prevBoard = await Bot.SendPhotoAsync(
+                Message msg = await Bot.SendPhotoAsync(
                     chatId: message.Chat.Id,
                     photo: file
                     );
-                res = "Tocca a te";
+                db.Games.SingleOrDefault(g => g.ChatID == message.Chat.Id).PrevBoardID = msg.MessageId;
+                db.SaveChanges();
+                res = "Tocca a te" + (botMove == null ? "" : ", ho mosso " + botMove);
                 List<InlineKeyboardButton> keyList = new List<InlineKeyboardButton>();
                 List<List<InlineKeyboardButton>> keyListList = new List<List<InlineKeyboardButton>>();
                 int count = 0;
@@ -179,7 +181,7 @@ namespace Ca38Bot
                     }
                     j++;
                     string text = (m.From == m.To) ? m.Piece : (m.Piece != "P" ? m.Piece : "") + duplicate + m.Captures + m.To;
-                    string callbackData = (m.From == m.To) ? m.Piece : m.From + m.To;
+                    string callbackData = ((m.From == m.To) ? m.Piece : m.From + m.To) + "/" + text;
                     keyList.Add(InlineKeyboardButton.WithCallbackData(text, callbackData));
                     count++;
                     if(count > 5)
@@ -214,9 +216,10 @@ namespace Ca38Bot
         private static async void BotOnCallbackQueryReceived(object sender, CallbackQueryEventArgs callbackQueryEventArgs)
         {
             using GamesDbContext db = new GamesDbContext();
-
+            string botMove = null;
             var callbackQuery = callbackQueryEventArgs.CallbackQuery;
-
+            string data = callbackQuery.Data.Split("/")[0];
+            string playerMove = callbackQuery.Data.Split("/").Length > 1 ? callbackQuery.Data.Split("/")[1] : null;
             List<Move> keys = new List<Move>();
 
             if (db.Games.SingleOrDefault(g => g.ChatID == callbackQuery.Message.Chat.Id) != null)
@@ -224,7 +227,7 @@ namespace Ca38Bot
                 if (db.Games.SingleOrDefault(g => g.ChatID == callbackQuery.Message.Chat.Id).BotGame == null)
                 {
                     string fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR";
-                    string first = callbackQuery.Data switch
+                    string first = data switch
                     {
                         "w" => "/p",
                         "r" => (rng.Next(0, 2) == 0) ? "/p" : "/b",
@@ -235,34 +238,150 @@ namespace Ca38Bot
                     db.Games.SingleOrDefault(g => g.ChatID == callbackQuery.Message.Chat.Id).BotGame = fen;
                     db.SaveChanges();
                     board.LoadFEN(fen);
-
                     keys = board.GetMovablePieces(Side.WHITE);
-                }
-                else
-                {
-                    keys = callbackQuery.Data switch
+
+                    board.player = true;
+                    if (first == "/b")
                     {
-                        "Back" => board.GetMovablePieces(Side.WHITE),
-                        "P" => board.GetValidMoves(Side.WHITE, Piece.WHITEPAWN),
-                        "R" => board.GetValidMoves(Side.WHITE, Piece.ROOK),
-                        "N" => board.GetValidMoves(Side.WHITE, Piece.KNIGHT),
-                        "B" => board.GetValidMoves(Side.WHITE, Piece.BISHOP),
-                        "Q" => board.GetValidMoves(Side.WHITE, Piece.QUEEN),
-                        "K" => board.GetValidMoves(Side.WHITE, Piece.KING),
+                        board.player = false;
+                        List<Move> botMovablePieces = new List<Move>();
+                        botMovablePieces = board.GetMovablePieces(Side.WHITE);
+                        string p = botMovablePieces.ElementAt(rng.Next(0, botMovablePieces.Count())).Piece;
+                        List<Move> botMoves = p switch
+                        {
+                            "P" => board.GetValidMoves(Side.WHITE, Piece.WHITEPAWN),
+                            "R" => board.GetValidMoves(Side.WHITE, Piece.ROOK),
+                            "N" => board.GetValidMoves(Side.WHITE, Piece.KNIGHT),
+                            "B" => board.GetValidMoves(Side.WHITE, Piece.BISHOP),
+                            "Q" => board.GetValidMoves(Side.WHITE, Piece.QUEEN),
+                            "K" => board.GetValidMoves(Side.WHITE, Piece.KING),
+                            _ => null
+                        };
+                        int rnd = rng.Next(0, botMoves.Count());
+                        Move move = botMoves.ElementAt(rnd);
+                        ushort from = (ushort)Move.GetSquareIndex(move.From);
+                        ushort to = (ushort)Move.GetSquareIndex(move.To);
+                        board.Move(new Move(0, to, from, 0, 0, 0));
+                        db.Games.SingleOrDefault(g => g.ChatID == callbackQuery.Message.Chat.Id).BotGame = fen;
+                        db.SaveChanges();
+                        string duplicate = "";
+                        if (move.From != move.To)
+                        {
+                            for (int i = 0; i < botMoves.Count(); ++i)
+                            {
+                                if (i == rnd) continue;
+                                if (move.To == botMoves.ElementAt(i).To)
+                                {
+                                    if (move.From[0] == botMoves.ElementAt(i).From[0])
+                                    {
+                                        duplicate = move.From[1].ToString();
+                                    }
+                                    else if (move.From[1] == botMoves.ElementAt(i).From[1])
+                                    {
+                                        duplicate = move.From[0].ToString();
+                                    }
+                                    else
+                                    {
+                                        duplicate = move.From[0].ToString();
+                                    }
+                                }
+                            }
+                        }
+                        botMove = (move.From == move.To) ? move.Piece : (move.Piece != "P" ? move.Piece : "") + duplicate + move.Captures + move.To;
+
+                        string history = db.Games.SingleOrDefault(g => g.ChatID == callbackQuery.Message.Chat.Id).GameHistory;
+                        history += botMove + ".";
+                        db.Games.SingleOrDefault(g => g.ChatID == callbackQuery.Message.Chat.Id).GameHistory = history;
+                        db.SaveChanges();
+
+                        keys = board.GetMovablePieces(Side.BLACK);
+                    }
+                }
+                else if ("rbw".IndexOf(callbackQuery.Data) == -1)
+                {
+                    board.LoadFEN(db.Games.SingleOrDefault(g => g.ChatID == callbackQuery.Message.Chat.Id).BotGame);
+                    keys = data switch
+                    {
+                        "Back" => board.GetMovablePieces(board.player ? Side.WHITE : Side.BLACK),
+                        "P" => board.GetValidMoves(board.player ? Side.WHITE : Side.BLACK, board.player ? Piece.WHITEPAWN : Piece.BLACKPAWN),
+                        "R" => board.GetValidMoves(board.player ? Side.WHITE : Side.BLACK, Piece.ROOK),
+                        "N" => board.GetValidMoves(board.player ? Side.WHITE : Side.BLACK, Piece.KNIGHT),
+                        "B" => board.GetValidMoves(board.player ? Side.WHITE : Side.BLACK, Piece.BISHOP),
+                        "Q" => board.GetValidMoves(board.player ? Side.WHITE : Side.BLACK, Piece.QUEEN),
+                        "K" => board.GetValidMoves(board.player ? Side.WHITE : Side.BLACK, Piece.KING),
                         _ => null
                     };
                     if(keys == null)
                     {
-                        ushort from = (ushort)Move.GetSquareIndex(callbackQuery.Data.Substring(0, 2));
-                        ushort to = (ushort)Move.GetSquareIndex(callbackQuery.Data.Substring(2, 2));
+                        string history;
+                        ushort from = (ushort)Move.GetSquareIndex(data.Substring(0, 2));
+                        ushort to = (ushort)Move.GetSquareIndex(data.Substring(2, 2));
+                        Move pMove = new Move(0, to, from, 0, 0, 0);
+                        board.Move(pMove);
+                        if (playerMove != null)
+                        {
+                            history = db.Games.SingleOrDefault(g => g.ChatID == callbackQuery.Message.Chat.Id).GameHistory;
+                            history += playerMove + ".";
+                            db.Games.SingleOrDefault(g => g.ChatID == callbackQuery.Message.Chat.Id).GameHistory = history;
+                            db.SaveChanges();
+                        }
+                        List<Move> botMovablePieces = new List<Move>();
+                        botMovablePieces = board.GetMovablePieces(board.player ? Side.BLACK : Side.WHITE);
+                        string p = botMovablePieces.ElementAt(rng.Next(0, botMovablePieces.Count())).Piece;
+                        List<Move> botMoves = p switch
+                        {
+                            "P" => board.GetValidMoves(board.player ? Side.BLACK : Side.WHITE, board.player ? Piece.BLACKPAWN : Piece.WHITEPAWN),
+                            "R" => board.GetValidMoves(board.player ? Side.BLACK : Side.WHITE, Piece.ROOK),
+                            "N" => board.GetValidMoves(board.player ? Side.BLACK : Side.WHITE, Piece.KNIGHT),
+                            "B" => board.GetValidMoves(board.player ? Side.BLACK : Side.WHITE, Piece.BISHOP),
+                            "Q" => board.GetValidMoves(board.player ? Side.BLACK : Side.WHITE, Piece.QUEEN),
+                            "K" => board.GetValidMoves(board.player ? Side.BLACK : Side.WHITE, Piece.KING),
+                            _ => null
+                        };
+                        int rnd = rng.Next(0, botMoves.Count());
+                        Move move = botMoves.ElementAt(rnd);
+                        from = (ushort)Move.GetSquareIndex(move.From);
+                        to = (ushort)Move.GetSquareIndex(move.To);
                         board.Move(new Move(0, to, from, 0, 0, 0));
-                        keys = board.GetMovablePieces(Side.WHITE);
+                        string duplicate = "";
+                        if (move.From != move.To)
+                        {
+                            for (int i = 0; i < botMoves.Count(); ++i)
+                            {
+                                if (i == rnd) continue;
+                                if (move.To == botMoves.ElementAt(i).To)
+                                {
+                                    if (move.From[0] == botMoves.ElementAt(i).From[0])
+                                    {
+                                        duplicate = move.From[1].ToString();
+                                    }
+                                    else if (move.From[1] == botMoves.ElementAt(i).From[1])
+                                    {
+                                        duplicate = move.From[0].ToString();
+                                    }
+                                    else
+                                    {
+                                        duplicate = move.From[0].ToString();
+                                    }
+                                }
+                            }
+                        }
+                        botMove = (move.From == move.To) ? move.Piece : (move.Piece != "P" ? move.Piece : "") + duplicate + move.Captures + move.To;
+
+                        history = db.Games.SingleOrDefault(g => g.ChatID == callbackQuery.Message.Chat.Id).GameHistory;
+                        history += botMove + ".";
+                        db.Games.SingleOrDefault(g => g.ChatID == callbackQuery.Message.Chat.Id).GameHistory = history;
+                        db.SaveChanges();
+
+                        keys = board.GetMovablePieces(board.player ? Side.WHITE : Side.BLACK);
                     }
                 }
             }
-            if(keys != null)
+            if(keys != null && keys.Count() > 0)
             {
-                await SendInlineKeyboard(callbackQuery.Message, keys);
+                db.Games.SingleOrDefault(g => g.ChatID == callbackQuery.Message.Chat.Id).BotGame = board.fen;
+                db.SaveChanges();
+                await SendInlineKeyboard(callbackQuery.Message, keys, botMove);
             }
         }
     }

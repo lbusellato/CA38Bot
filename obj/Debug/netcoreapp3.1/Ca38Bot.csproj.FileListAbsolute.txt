@@ -75,3 +75,4 @@ C:\Users\loren\Documents\GitHub\Ca38Bot\Ca38Bot\obj\Debug\netcoreapp3.1\Ca38Bot.
 C:\Users\loren\Documents\GitHub\Ca38Bot\Ca38Bot\obj\Debug\netcoreapp3.1\Ca38Bot.Migrations.ChatIDField.resources
 C:\Users\loren\Documents\GitHub\Ca38Bot\Ca38Bot\obj\Debug\netcoreapp3.1\Ca38Bot.Migrations.MMInitField.resources
 C:\Users\loren\Documents\GitHub\Ca38Bot\Ca38Bot\obj\Debug\netcoreapp3.1\Ca38Bot.Migrations.GameHistoryField.resources
+C:\Users\loren\Documents\GitHub\Ca38Bot\Ca38Bot\obj\Debug\netcoreapp3.1\Ca38Bot.Migrations.PrevBoardIDField.resources

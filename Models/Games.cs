@@ -6,5 +6,6 @@
         public long ChatID { get; set; }
         public string BotGame { get; set; }
         public string GameHistory { get; set; }
+        public int PrevBoardID { get; set; }
     }
 }

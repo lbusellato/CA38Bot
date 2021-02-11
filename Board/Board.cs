@@ -427,8 +427,7 @@ namespace Ca38Bot.Board
                 tmp += "/";
             }
             string res = tmp.Remove(tmp.Length - 1, 1);
-            fen = res;
-            this.LoadFEN(fen);
+            LoadFEN(res);
         }
     }
 }
