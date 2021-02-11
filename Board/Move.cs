@@ -48,7 +48,7 @@ namespace Ca38Bot.Board
         readonly uint toMask =         0b00000000000000111111;
         readonly uint fromMask =       0b00000000111111000000;
         //readonly uint promotionMask =  0b00000011000000000000;
-        //readonly uint specialMask =    0b00001100000000000000;
+        readonly uint specialMask =    0b00001100000000000000;
         readonly uint pieceMask =      0b01110000000000000000;
         readonly uint captureMask =    0b10000000000000000000;
         readonly uint m = 0;
@@ -80,6 +80,11 @@ namespace Ca38Bot.Board
             set { }
         }
 
+        public bool IsEnPassant
+        {
+            get { return ((m & specialMask) >> 14) == 0b10; }
+            set { }
+        }
         public string Piece
         {
             get { return PieceNames[(m & pieceMask) >> 16]; }

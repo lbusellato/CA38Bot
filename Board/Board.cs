@@ -30,6 +30,9 @@ namespace Ca38Bot.Board
         public ulong BlackPieces;
         public ulong AllPieces;
 
+        /* EN PASSANT */
+        public ulong EnPassant;
+
         public bool player;
 
         public string fen;
@@ -77,6 +80,15 @@ namespace Ca38Bot.Board
             fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR";
 
             mm.Init();
+        }
+
+        public void SetEnPassant(int square)
+        {
+            if(square != -1) EnPassant |= (1UL << square);
+        }
+        public void ResetEnPassant(int square)
+        {
+            EnPassant &= ~(1UL << square);
         }
 
         public void LoadFEN(string fen)
@@ -281,7 +293,16 @@ namespace Ca38Bot.Board
                     {
                         string destSquare = coords[destSquares[j]];
                         ushort capture;
-                        if(IsOccupied(destSquare))
+                        ushort enPassant;
+                        if (IsEnPassant(destSquare))
+                        {
+                            enPassant = 0b10;
+                        }
+                        else
+                        {
+                            enPassant = 0;
+                        }
+                        if (IsOccupied(destSquare) || IsEnPassant(destSquare))
                         {
                             capture = 1;
                         }
@@ -290,17 +311,27 @@ namespace Ca38Bot.Board
                             capture = 0;
                         }
                         moves.Add(new Move(
-                            Board.Move.PieceIndex(piece),
+                            Move.PieceIndex(piece),
                             (ushort)destSquares[j],
                             (ushort)squares[k],
                             0,
-                            0,
+                            enPassant,
                             capture)
                         );
                     }
                 }
             }
             return moves;
+        }
+
+        public bool IsEnPassant(string square)
+        {
+            int index;
+            for (index = 0; index < coords.Length; ++index)
+            {
+                if (square == coords[index]) break;
+            }
+            return ((EnPassant & (1UL << index)) > 0);
         }
 
         public bool IsOccupied(string square)
@@ -344,7 +375,7 @@ namespace Ca38Bot.Board
                 {
                     if(mm.GetMoves(this, side, p, squares[k]) != 0)
                     {
-                        res.Add(new Move(Board.Move.PieceIndex(p), 0, 0, 0, 0, 0));
+                        res.Add(new Move(Move.PieceIndex(p), 0, 0, 0, 0, 0));
                         break;
                     }
                 }
@@ -352,8 +383,14 @@ namespace Ca38Bot.Board
             return res;
         }
 
-        public void Move(Move m)
+        public void DoMove(Move m)
         {
+            string enPassantClear = null;
+            if (IsEnPassant(m.To))
+            {
+                enPassantClear = m.To[0].ToString() + m.From[1].ToString();
+            }
+            ResetEnPassant(Move.GetSquareIndex(m.To));
             string from = m.From;
             string to = m.To;
             List<string> _fen = new List<string>();
@@ -403,6 +440,28 @@ namespace Ca38Bot.Board
             }; ;
             Int32.TryParse(to[1].ToString(), out int y2);
             y2 = 8 - y2;
+
+            if (enPassantClear != null)
+            {
+                int x3 = enPassantClear[0] switch
+                {
+                    'a' => 0,
+                    'b' => 1,
+                    'c' => 2,
+                    'd' => 3,
+                    'e' => 4,
+                    'f' => 5,
+                    'g' => 6,
+                    'h' => 7,
+                    _ => 0,
+                }; ;
+                Int32.TryParse(enPassantClear[1].ToString(), out int y3);
+                y3 = 8 - y3;
+                subs = _fen[y3].ToCharArray();
+                subs[x3] = 's';
+                _fen[y3] = String.Join("", subs);
+
+            }
             char oldPiece = _fen[y1].ElementAt(x1);
             subs = _fen[y1].ToCharArray();
             subs[x1] = 's';

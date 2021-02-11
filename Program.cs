@@ -226,7 +226,7 @@ namespace Ca38Bot
             {
                 if (db.Games.SingleOrDefault(g => g.ChatID == callbackQuery.Message.Chat.Id).BotGame == null)
                 {
-                    string fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR";
+                    string fen = "8/2pp4/8/2P1P3/8/8/5P1P/RNBQKBNR";//= "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR";
                     string first = data switch
                     {
                         "w" => "/p",
@@ -261,7 +261,13 @@ namespace Ca38Bot
                         Move move = botMoves.ElementAt(rnd);
                         ushort from = (ushort)Move.GetSquareIndex(move.From);
                         ushort to = (ushort)Move.GetSquareIndex(move.To);
-                        board.Move(new Move(0, to, from, 0, 0, 0));
+                        board.DoMove(new Move(0, to, from, 0, 0, 0));
+                        int enPassantSquareIndex = -1;
+                        if (move.Piece == "P" && move.From[0] == move.To[0] && Math.Abs(move.To[1] - move.From[1]) == 2)
+                        {
+                            enPassantSquareIndex = Move.GetSquareIndex(move.To) + ((move.To[1] > move.From[1]) ? -8 : 8);
+                        }
+                        board.SetEnPassant(enPassantSquareIndex);
                         db.Games.SingleOrDefault(g => g.ChatID == callbackQuery.Message.Chat.Id).BotGame = fen;
                         db.SaveChanges();
                         string duplicate = "";
@@ -288,7 +294,6 @@ namespace Ca38Bot
                             }
                         }
                         botMove = (move.From == move.To) ? move.Piece : (move.Piece != "P" ? move.Piece : "") + duplicate + move.Captures + move.To;
-
                         string history = db.Games.SingleOrDefault(g => g.ChatID == callbackQuery.Message.Chat.Id).GameHistory;
                         history += botMove + ".";
                         db.Games.SingleOrDefault(g => g.ChatID == callbackQuery.Message.Chat.Id).GameHistory = history;
@@ -317,7 +322,13 @@ namespace Ca38Bot
                         ushort from = (ushort)Move.GetSquareIndex(data.Substring(0, 2));
                         ushort to = (ushort)Move.GetSquareIndex(data.Substring(2, 2));
                         Move pMove = new Move(0, to, from, 0, 0, 0);
-                        board.Move(pMove);
+                        board.DoMove(pMove);
+                        int enPassantSquareIndex = -1;
+                        if (pMove.Piece == "P" && pMove.From[0] == pMove.To[0] && Math.Abs(pMove.To[1] - pMove.From[1]) == 2)
+                        {
+                            enPassantSquareIndex = Move.GetSquareIndex(pMove.To) + ((pMove.To[1] > pMove.From[1]) ? -8 : 8);
+                        }
+                        board.SetEnPassant(enPassantSquareIndex);
                         if (playerMove != null)
                         {
                             history = db.Games.SingleOrDefault(g => g.ChatID == callbackQuery.Message.Chat.Id).GameHistory;
@@ -342,7 +353,13 @@ namespace Ca38Bot
                         Move move = botMoves.ElementAt(rnd);
                         from = (ushort)Move.GetSquareIndex(move.From);
                         to = (ushort)Move.GetSquareIndex(move.To);
-                        board.Move(new Move(0, to, from, 0, 0, 0));
+                        board.DoMove(new Move(0, to, from, 0, 0, 0));
+                        enPassantSquareIndex = -1;
+                        if (move.Piece == "P" && move.From[0] == move.To[0] && Math.Abs(move.To[1] - move.From[1]) == 2)
+                        {
+                            enPassantSquareIndex = Move.GetSquareIndex(move.To) + ((move.To[1] > move.From[1]) ? - 8 : 8);
+                        }
+                        board.SetEnPassant(enPassantSquareIndex);
                         string duplicate = "";
                         if (move.From != move.To)
                         {

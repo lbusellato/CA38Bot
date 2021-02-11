@@ -801,7 +801,7 @@ namespace Ca38Bot.Board
                 p2 = ((p1 & Masks.MASKRANK3) << 8) & ~board.AllPieces;
                 a1 = (pos & Masks.CLEARFILEH) << 7;
                 a2 = (pos & Masks.CLEARFILEA) << 9;
-                a = (a1 | a2) & board.BlackPieces;
+                a = (a1 | a2) & board.BlackPieces | (a1 | a2) & board.EnPassant;
             }
             else
             {
@@ -809,7 +809,7 @@ namespace Ca38Bot.Board
                 p2 = ((p1 & Masks.MASKRANK6) >> 8) & ~board.AllPieces;
                 a1 = (pos & Masks.CLEARFILEA) >> 7;
                 a2 = (pos & Masks.CLEARFILEH) >> 9;
-                a = (a1 | a2) & board.WhitePieces;
+                a = (a1 | a2) & board.WhitePieces | (a1 | a2) & board.EnPassant;
             }
             return (a | p1 | p2);
         }
