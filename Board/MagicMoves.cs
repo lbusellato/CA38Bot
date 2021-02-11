@@ -18,21 +18,43 @@ namespace Ca38Bot.Board
     public class MagicMoves
     {
         /* BIT MANIPULATION */
+        /// <summary>
+        /// Sets the i-th bit in the number u to 1
+        /// </summary>
+        /// <param name="u">A 64-bit number</param>
+        /// <param name="i">Bit index</param>
         public void SetBit(ref ulong u, int i)
         {
             u |= (1UL << i);
         }
 
+        /// <summary>
+        /// Get the state of the i-th bit in the number u
+        /// </summary>
+        /// <param name="u">A 64-bit number</param>
+        /// <param name="i">Bit index</param>
+        /// <returns>0 if the bit is not set, 1 if it is</returns>
         public int GetBit(ulong u, int i)
         {
             return ((u & (1UL << i)) > 0 ? 1 : 0);
         }
 
+        /// <summary>
+        /// Set the i-th bit in the provided number u to 0
+        /// </summary>
+        /// <param name="u"></param>
+        /// <param name="i"></param>
         public void PopBit(ref ulong u, int i)
         {
             u ^= (1UL << i);
         }
 
+        /// <summary>
+        /// Iteratively count set bits in the provided 64-bit number
+        /// TODO: consider using a faster approach
+        /// </summary>
+        /// <param name="u">A 64-bit number</param>
+        /// <returns>The number of set bits in u</returns>
         public int CountBits(ulong u)
         {
             int count = 0;
@@ -47,15 +69,21 @@ namespace Ca38Bot.Board
             return count;
         }
 
+        /// <summary>
+        /// Finds the index of the 1st least significant set bit in v
+        /// TODO: consider using a faster approach
+        /// </summary>
+        /// <param name="u">A 64-bit number</param>
+        /// <returns>The index of the first least significant set bit in u</returns>
         public int GetLS1BIndex(ulong u)
         {
-            int count = 0;
+            int index = 0;
             while (GetBit(u, 0) == 0)
             {
-                count++;
+                index++;
                 u >>= 1;
             }
-            return count;
+            return index;
         }
 
         public ulong[] GetUniqueBitboards(ulong u)
@@ -64,7 +92,7 @@ namespace Ca38Bot.Board
             ulong cpy = u;
             if (cpy == 0) return null;
             res = new ulong[CountBits(cpy)];
-            for(int i = 0; i < CountBits(u); ++i)
+            for (int i = 0; i < CountBits(u); ++i)
             {
                 int bitIndex = GetLS1BIndex(cpy);
                 res[i] = (1UL << bitIndex);
@@ -101,7 +129,7 @@ namespace Ca38Bot.Board
             {
                 for (int j = 0; j < 8; ++j)
                 {
-                    if((u & fileMasks[i] & rankMasks[j]) > 0)
+                    if ((u & fileMasks[i] & rankMasks[j]) > 0)
                     {
                         res.Add(63 - (i + 8 * j));
                     }
@@ -110,7 +138,7 @@ namespace Ca38Bot.Board
             return res.ToArray();
         }
 
-        /* PRE GENERATED MOVEMENT MASKS */
+        /* PRE CALCULATED MOVEMENT MASKS */
         public ulong[] KingMasks = new ulong[64]{
             0x302,
             0x705,
@@ -575,7 +603,7 @@ namespace Ca38Bot.Board
         };
 
         /* ATTACK TABLES */
-        public ulong[,] BishopAttacks = new ulong[64,512];
+        public ulong[,] BishopAttacks = new ulong[64, 512];
         public ulong[,] RookAttacks = new ulong[64, 4096];
         /* MAGIC NUMBERS */
         readonly int[] BishopShift = new int[64] {
@@ -731,6 +759,64 @@ namespace Ca38Bot.Board
             0x4010011029020020
         };
 
+        ulong GenAttackMask(Chessboard board, Side side)
+        {
+            ulong attackMask = 0UL;
+            ulong[] bb = GetUniqueBitboards(side == Side.WHITE ? board.WhiteBishops : board.BlackBishops);
+            int[] squares;
+            for (int i = 0; i < bb.Length; ++i)
+            {
+                squares = GetUniqueSquares(bb[i]);
+                for (int j = 0; j < squares.Length; ++j)
+                {
+                    attackMask |= GetMoves(board, side, Piece.BISHOP, squares[j]);
+                }
+            }
+            bb = GetUniqueBitboards(side == Side.WHITE ? board.WhiteKnights : board.BlackKnights);
+            for (int i = 0; i < bb.Length; ++i)
+            {
+                squares = GetUniqueSquares(bb[i]);
+                for (int j = 0; j < squares.Length; ++j)
+                {
+                    attackMask |= GetMoves(board, side, Piece.KNIGHT, squares[j]);
+                }
+            }
+            bb = GetUniqueBitboards(side == Side.WHITE ? board.WhiteRooks : board.BlackRooks);
+            for (int i = 0; i < bb.Length; ++i)
+            {
+                squares = GetUniqueSquares(bb[i]);
+                for (int j = 0; j < squares.Length; ++j)
+                {
+                    attackMask |= GetMoves(board, side, Piece.ROOK, squares[j]);
+                }
+            }
+            bb = GetUniqueBitboards(side == Side.WHITE ? board.WhiteQueen : board.BlackQueen);
+            for (int i = 0; i < bb.Length; ++i)
+            {
+                squares = GetUniqueSquares(bb[i]);
+                for (int j = 0; j < squares.Length; ++j)
+                {
+                    attackMask |= GetMoves(board, side, Piece.QUEEN, squares[j]);
+                }
+            }
+            bb = GetUniqueBitboards(side == Side.WHITE ? board.WhitePawns : board.BlackPawns);
+            for (int i = 0; i < bb.Length; ++i)
+            {
+                squares = GetUniqueSquares(bb[i]);
+                for (int j = 0; j < squares.Length; ++j)
+                {
+                    attackMask |= GetMoves(board, side, side == Side.WHITE ? Piece.WHITEPAWN : Piece.BLACKPAWN, squares[j]);
+                }
+            }
+            return attackMask;
+        }
+
+        /// <summary>
+        /// Generates the attack bitboard for a bishop on the provided square with the provided board occupancy
+        /// </summary>
+        /// <param name="square">The index of the square the bishop is on</param>
+        /// <param name="occupancy">A bitboard representing all pieces on the board</param>
+        /// <returns>A bitboard representing reachable targets for the bishop</returns>
         ulong GenBishopAttacks(int square, ulong occupancy)
         {
             ulong attacks = 0UL;
@@ -744,13 +830,13 @@ namespace Ca38Bot.Board
             }
             for (r = tr - 1, f = tf + 1; r >= 0 && f <= 7; r--, f++)
             {
-                attacks |= (1UL << (r* 8 + f));
-                if (((1UL << (r* 8 + f)) & occupancy) > 0) break;
+                attacks |= (1UL << (r * 8 + f));
+                if (((1UL << (r * 8 + f)) & occupancy) > 0) break;
             }
             for (r = tr + 1, f = tf - 1; r <= 7 && f >= 0; r++, f--)
             {
-                attacks |= (1UL << (r* 8 + f));
-                if (((1UL << (r* 8 + f)) & occupancy) > 0) break;
+                attacks |= (1UL << (r * 8 + f));
+                if (((1UL << (r * 8 + f)) & occupancy) > 0) break;
             }
             for (r = tr - 1, f = tf - 1; r >= 0 && f >= 0; r--, f--)
             {
@@ -760,6 +846,12 @@ namespace Ca38Bot.Board
             return attacks;
         }
 
+        /// <summary>
+        /// Generates the attack bitboard for a rook on the provided square with the provided board occupancy
+        /// </summary>
+        /// <param name="square">The index of the square the rook is on</param>
+        /// <param name="occupancy">A bitboard representing all pieces on the board</param>
+        /// <returns>A bitboard representing reachable targets for the rook</returns>
         ulong GenRookAttacks(int square, ulong occupancy)
         {
             ulong attacks = 0UL;
@@ -773,14 +865,14 @@ namespace Ca38Bot.Board
             }
             for (r = tr - 1; r >= 0; r--)
             {
-                attacks |= (1UL << (r* 8 + tf));
-                if (((1UL << (r* 8 + tf)) & occupancy) > 0) break;
+                attacks |= (1UL << (r * 8 + tf));
+                if (((1UL << (r * 8 + tf)) & occupancy) > 0) break;
             }
-    
+
             for (f = tf + 1; f <= 7; f++)
             {
-                attacks |= (1UL << (tr* 8 + f));
-                if (((1UL << (tr* 8 + f)) & occupancy) > 0) break;
+                attacks |= (1UL << (tr * 8 + f));
+                if (((1UL << (tr * 8 + f)) & occupancy) > 0) break;
             }
 
             for (f = tf - 1; f >= 0; f--)
@@ -791,11 +883,18 @@ namespace Ca38Bot.Board
             return attacks;
         }
 
-        ulong GenPawnAttacks(Side side, int square, Chessboard board)
+        /// <summary>
+        /// Generates the movement bitboard for a pawn of the provided color on the provided square
+        /// </summary>
+        /// <param name="board">The board the pawn is on</param>
+        /// <param name="side">The color of the pawn</param>
+        /// <param name="square">The index of the square the pawn is on</param>
+        /// <returns>A bitboard representing reachable targets for the pawn, including en-passant</returns>
+        ulong GenPawnMoves(Chessboard board, Side side, int square)
         {
             ulong pos = (1UL << square);
             ulong p1, p2, a1, a2, a;
-            if(side == Side.WHITE)
+            if (side == Side.WHITE)
             {
                 p1 = (pos << 8) & ~board.AllPieces;
                 p2 = ((p1 & Masks.MASKRANK3) << 8) & ~board.AllPieces;
@@ -814,14 +913,27 @@ namespace Ca38Bot.Board
             return (a | p1 | p2);
         }
 
+        ulong GenKingMoves(Chessboard board, Side side, int square)
+        {
+            return (KingMasks[square] & ((side == Side.WHITE) ? ~board.WhitePieces : ~board.BlackPieces)) &
+                ~GenAttackMask(board, (side == Side.WHITE) ? Side.BLACK : Side.WHITE);
+        }
+
+        /// <summary>
+        /// Generates an occupancy bitboard from the provided square and the provided attack mask
+        /// </summary>
+        /// <param name="index">The index of the bitboard</param>
+        /// <param name="bitCount">The number of set bits in the attack mask</param>
+        /// <param name="mask">The attack mask</param>
+        /// <returns>The generated occupancy bitboard</returns>
         ulong SetOccupancy(ulong index, int bitCount, ulong mask)
         {
             ulong occupancy = 0UL;
-            for(int i = 0; i < bitCount; ++i)
+            for (int i = 0; i < bitCount; ++i)
             {
                 int square = GetLS1BIndex(mask);
                 PopBit(ref mask, square);
-                if((index & (1UL << i)) > 0)
+                if ((index & (1UL << i)) > 0)
                 {
                     occupancy |= (1UL << square);
                 }
@@ -829,6 +941,15 @@ namespace Ca38Bot.Board
             return occupancy;
         }
 
+        /// <summary>
+        /// Returns a bitboard containing all legal moves for the piece
+        /// TODO: implement castling, checkmate, pins
+        /// </summary>
+        /// <param name="board">The board the piece is on</param>
+        /// <param name="side">The color of the piece</param>
+        /// <param name="piece">The piece</param>
+        /// <param name="square">The square the piece is on</param>
+        /// <returns></returns>
         public ulong GetMoves(Chessboard board, Side side, Piece piece, int square)
         {
             ulong res = 0L;
@@ -843,7 +964,7 @@ namespace Ca38Bot.Board
                     occupancyCPY &= RookMasks[square];
                     occupancyCPY *= RookMagics[square];
                     occupancyCPY >>= RookShift[square];
-                    res =  (BishopAttacks[square, occupancy] | RookAttacks[square, occupancyCPY]);
+                    res = (BishopAttacks[square, occupancy] | RookAttacks[square, occupancyCPY]);
                     break;
                 case Piece.BISHOP:
                     occupancy &= BishopMasks[square];
@@ -858,13 +979,13 @@ namespace Ca38Bot.Board
                     res = RookAttacks[square, occupancy];
                     break;
                 case Piece.WHITEPAWN:
-                    res = GenPawnAttacks(side, square, board);
+                    res = GenPawnMoves(board, side, square);
                     break;
                 case Piece.BLACKPAWN:
-                    res = GenPawnAttacks(side, square, board);
+                    res = GenPawnMoves(board, side, square);
                     break;
                 case Piece.KING:
-                    res = KingMasks[square] & ((side == Side.WHITE) ? ~board.WhitePieces : ~board.BlackPieces);
+                    res = GenKingMoves(board, side, square);
                     break;
                 case Piece.KNIGHT:
                     res = KnightMasks[square];
@@ -874,6 +995,10 @@ namespace Ca38Bot.Board
         }
 
         /* INIT */
+        /// <summary>
+        /// Initializes the arrays of precalculated attacking bitboards for the selected piece
+        /// </summary>
+        /// <param name="bishop">Boolean that switches the generation from bishop (true) to rook (false)</param>
         public void InitSliders(bool bishop)
         {
             for (int square = 0; square < 64; ++square)
@@ -899,6 +1024,9 @@ namespace Ca38Bot.Board
             }
         }
 
+        /// <summary>
+        /// Initialize both the rook and the bishops' pre-calculated array of attacking bitboards
+        /// </summary>
         public void Init()
         {
             InitSliders(true);

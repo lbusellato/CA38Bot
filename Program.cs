@@ -17,10 +17,6 @@ namespace Ca38Bot
 {
     /* TO DO LIST 
      * 
-     * TODO: Implement en passant
-     * TODO: Implement castling
-     * TODO: Implement check
-     * TODO: Implement checkmate
      * TODO: Implement resign
      * TODO: Implement threefold repetition
      * TODO: Implement 50 move draw rule
@@ -226,7 +222,7 @@ namespace Ca38Bot
             {
                 if (db.Games.SingleOrDefault(g => g.ChatID == callbackQuery.Message.Chat.Id).BotGame == null)
                 {
-                    string fen = "8/2pp4/8/2P1P3/8/8/5P1P/RNBQKBNR";//= "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR";
+                    string fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR";
                     string first = data switch
                     {
                         "w" => "/p",
