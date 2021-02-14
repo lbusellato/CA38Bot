@@ -37,6 +37,8 @@ namespace Ca38Bot.Board
 
         public string fen;
 
+        public Dictionary<string, int> SquareIndexes = new Dictionary<string, int>(64);
+
         public string[] coords = new string[64]
         {
             "h1", "g1", "f1", "e1", "d1", "c1", "b1", "a1",
@@ -58,6 +60,11 @@ namespace Ca38Bot.Board
         public Chessboard() 
         {
             player = true;
+
+            for (int i = 0; i < 64; ++i)
+            {
+                SquareIndexes.Add(coords[i], 63 - i);
+            }
 
             WhitePawns = Masks.WHITEPAWNS;
             WhiteRooks = Masks.WHITEROOKS;
@@ -82,13 +89,14 @@ namespace Ca38Bot.Board
             mm.Init();
         }
 
-        public void SetEnPassant(int square)
+        public bool IsOccupied(string square)
         {
-            if(square != -1) EnPassant |= (1UL << square);
-        }
-        public void ResetEnPassant(int square)
-        {
-            EnPassant &= ~(1UL << square);
+            int index;
+            for (index = 0; index < coords.Length; ++index)
+            {
+                if (square == coords[index]) break;
+            }
+            return ((AllPieces & (1UL << index)) > 0);
         }
 
         public void LoadFEN(string fen)
@@ -293,16 +301,8 @@ namespace Ca38Bot.Board
                     {
                         string destSquare = coords[destSquares[j]];
                         ushort capture;
-                        ushort enPassant;
-                        if (IsEnPassant(destSquare))
-                        {
-                            enPassant = 0b10;
-                        }
-                        else
-                        {
-                            enPassant = 0;
-                        }
-                        if (IsOccupied(destSquare) || IsEnPassant(destSquare))
+                        ushort enPassant = 0;
+                        if (IsOccupied(destSquare) )
                         {
                             capture = 1;
                         }
@@ -321,27 +321,35 @@ namespace Ca38Bot.Board
                     }
                 }
             }
+            char duplicate;
+            for (int i = 0; i < moves.Count(); ++i)
+            {
+                Move m = moves.ElementAt(i);
+                for (int j = 0; j < moves.Count(); ++j)
+                {
+                    if (i == j) continue;
+                    if (m.To == moves.ElementAt(j).To)
+                    {
+                        if (m.From[0] == moves.ElementAt(j).From[0])
+                        {
+                            duplicate = m.From[1];
+                            moves.ElementAt(j).SetDuplicate(moves.ElementAt(j).From[1]);
+                        }
+                        else if (m.From[1] == moves.ElementAt(j).From[1])
+                        {
+                            duplicate = m.From[0];
+                            moves.ElementAt(j).SetDuplicate(moves.ElementAt(j).From[0]);
+                        }
+                        else
+                        {
+                            duplicate = m.From[0];
+                            moves.ElementAt(j).SetDuplicate(moves.ElementAt(j).From[0]);
+                        }
+                        m.SetDuplicate(duplicate);
+                    }
+                }
+            }
             return moves;
-        }
-
-        public bool IsEnPassant(string square)
-        {
-            int index;
-            for (index = 0; index < coords.Length; ++index)
-            {
-                if (square == coords[index]) break;
-            }
-            return ((EnPassant & (1UL << index)) > 0);
-        }
-
-        public bool IsOccupied(string square)
-        {
-            int index;
-            for(index = 0; index < coords.Length; ++index)
-            {
-                if (square == coords[index]) break;
-            }
-            return ((AllPieces & (1UL << index)) > 0);
         }
 
         public List<Move> GetMovablePieces(Side side)
@@ -383,110 +391,80 @@ namespace Ca38Bot.Board
             return res;
         }
 
-        public void DoMove(Move m)
+        public void Make(Move m, Side side, bool updateFEN = true)
         {
-            string enPassantClear = null;
-            if (IsEnPassant(m.To))
+            SquareIndexes.TryGetValue(m.From, out int from);
+            SquareIndexes.TryGetValue(m.To, out int to);
+            ulong[] oldMasks = side == Side.WHITE ? new ulong[6] { WhitePawns, WhiteRooks, WhiteBishops, WhiteKnights, WhiteKing, WhiteQueen } :
+                                                    new ulong[6] { BlackPawns, BlackRooks, BlackBishops, BlackKnights, BlackKing, BlackQueen };
+            ulong newMask = m.Piece switch
             {
-                enPassantClear = m.To[0].ToString() + m.From[1].ToString();
-            }
-            ResetEnPassant(Move.GetSquareIndex(m.To));
-            string from = m.From;
-            string to = m.To;
-            List<string> _fen = new List<string>();
-            string y;
-            char[] subs;
-            StringBuilder builder;
-            foreach (string s in fen.Split("/"))
+                "P" => (side == Side.WHITE) ? WhitePawns : BlackPawns,
+                "R" => (side == Side.WHITE) ? WhiteRooks : BlackRooks,
+                "N" => (side == Side.WHITE) ? WhiteKnights : BlackKnights,
+                "B" => (side == Side.WHITE) ? WhiteBishops : BlackBishops,
+                "Q" => (side == Side.WHITE) ? WhiteQueen : BlackQueen,
+                "K" => (side == Side.WHITE) ? WhiteKing : BlackKing,
+                _ => 0
+            };
+            SquareIndexes.TryGetValue(m.From, out int clear);
+            newMask &= ~(1UL << clear);
+            WhitePieces = WhitePawns | WhiteRooks | WhiteBishops | WhiteKnights | WhiteKing | WhiteQueen;
+            BlackPieces = BlackPawns | BlackRooks | BlackBishops | BlackKnights | BlackKing | BlackQueen;
+            AllPieces = WhitePieces | BlackPieces;
+            //FEN updating
+            if (updateFEN)
             {
-                builder = new StringBuilder(s);
-                builder.Replace("1", "s");
-                builder.Replace("2", "ss");
-                builder.Replace("3", "sss");
-                builder.Replace("4", "ssss");
-                builder.Replace("5", "sssss");
-                builder.Replace("6", "ssssss");
-                builder.Replace("7", "sssssss");
-                builder.Replace("8", "ssssssss");
-
-                y = builder.ToString();
-                _fen.Add(y);
-            }
-            int x1 = from[0] switch
-            {
-                'a' => 0,
-                'b' => 1,
-                'c' => 2,
-                'd' => 3,
-                'e' => 4,
-                'f' => 5,
-                'g' => 6,
-                'h' => 7,
-                _ => 0,
-            }; ;
-            Int32.TryParse(from[1].ToString(), out int y1);
-            y1 = 8 - y1;
-            int x2 = to[0] switch
-            {
-                'a' => 0,
-                'b' => 1,
-                'c' => 2,
-                'd' => 3,
-                'e' => 4,
-                'f' => 5,
-                'g' => 6,
-                'h' => 7,
-                _ => 0,
-            }; ;
-            Int32.TryParse(to[1].ToString(), out int y2);
-            y2 = 8 - y2;
-
-            if (enPassantClear != null)
-            {
-                int x3 = enPassantClear[0] switch
+                List<string> _fen = new List<string>();
+                string y;
+                char[] subs;
+                StringBuilder builder;
+                foreach (string s in fen.Split("/"))
                 {
-                    'a' => 0,
-                    'b' => 1,
-                    'c' => 2,
-                    'd' => 3,
-                    'e' => 4,
-                    'f' => 5,
-                    'g' => 6,
-                    'h' => 7,
-                    _ => 0,
-                }; ;
-                Int32.TryParse(enPassantClear[1].ToString(), out int y3);
-                y3 = 8 - y3;
-                subs = _fen[y3].ToCharArray();
-                subs[x3] = 's';
-                _fen[y3] = String.Join("", subs);
+                    builder = new StringBuilder(s);
+                    builder.Replace("1", "s");
+                    builder.Replace("2", "ss");
+                    builder.Replace("3", "sss");
+                    builder.Replace("4", "ssss");
+                    builder.Replace("5", "sssss");
+                    builder.Replace("6", "ssssss");
+                    builder.Replace("7", "sssssss");
+                    builder.Replace("8", "ssssssss");
 
+                    y = builder.ToString();
+                    _fen.Add(y);
+                }
+                int x1 = from % 8;
+                int y1 = from / 8;
+                int x2 = to % 8;
+                int y2 = to / 8;
+
+                char oldPiece = _fen[y1].ElementAt(x1);
+                subs = _fen[y1].ToCharArray();
+                subs[x1] = 's';
+                _fen[y1] = String.Join("", subs);
+                subs = _fen[y2].ToCharArray();
+                subs[x2] = oldPiece;
+                _fen[y2] = String.Join("", subs);
+                string tmp = "";
+                foreach (string s in _fen)
+                {
+                    builder = new StringBuilder(s);
+                    builder.Replace("ssssssss", "8");
+                    builder.Replace("sssssss", "7");
+                    builder.Replace("ssssss", "6");
+                    builder.Replace("sssss", "5");
+                    builder.Replace("ssss", "4");
+                    builder.Replace("sss", "3");
+                    builder.Replace("ss", "2");
+                    builder.Replace("s", "1");
+                    string t = builder.ToString();
+                    tmp += t;
+                    tmp += "/";
+                }
+                string res = tmp.Remove(tmp.Length - 1, 1);
+                fen = res;
             }
-            char oldPiece = _fen[y1].ElementAt(x1);
-            subs = _fen[y1].ToCharArray();
-            subs[x1] = 's';
-            _fen[y1] = String.Join("", subs);
-            subs = _fen[y2].ToCharArray();
-            subs[x2] = oldPiece;
-            _fen[y2] = String.Join("", subs);
-            string tmp = "";
-            foreach (string s in _fen)
-            {
-                builder = new StringBuilder(s);
-                builder.Replace("ssssssss", "8");
-                builder.Replace("sssssss", "7");
-                builder.Replace("ssssss", "6");
-                builder.Replace("sssss", "5");
-                builder.Replace("ssss", "4");
-                builder.Replace("sss", "3");
-                builder.Replace("ss", "2");
-                builder.Replace("s", "1");
-                string t = builder.ToString();
-                tmp += t;
-                tmp += "/";
-            }
-            string res = tmp.Remove(tmp.Length - 1, 1);
-            LoadFEN(res);
         }
     }
 }

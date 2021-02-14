@@ -26,6 +26,7 @@ namespace Ca38Bot.Board
          * MOVE
          * 0b {31-18} {19} {18 17 16} {15 14} {13 12} {11 12 9 8 7 6} {5 4 3 2 1 0}
          * 
+         * 25-20 duplicate
          * 19 capture:  0 false 1 true
          * 18-16 piece:    000 pawn
          *                 001 rook
@@ -45,13 +46,14 @@ namespace Ca38Bot.Board
          * 5-0 destination square 0-63
          * 
          */
-        readonly uint toMask =         0b00000000000000111111;
-        readonly uint fromMask =       0b00000000111111000000;
+        readonly uint toMask =         0b00000000000000000000111111;
+        readonly uint fromMask =       0b00000000000000111111000000;
         //readonly uint promotionMask =  0b00000011000000000000;
-        readonly uint specialMask =    0b00001100000000000000;
-        readonly uint pieceMask =      0b01110000000000000000;
-        readonly uint captureMask =    0b10000000000000000000;
-        readonly uint m = 0;
+        readonly uint specialMask =    0b00000000001100000000000000;
+        readonly uint pieceMask =      0b00000001110000000000000000;
+        readonly uint captureMask =    0b00000010000000000000000000;
+        readonly uint duplicateMask =  0b11111100000000000000000000;
+        uint m = 0;
 
         public static ushort PieceIndex(Piece piece) => piece switch
         {
@@ -89,6 +91,18 @@ namespace Ca38Bot.Board
         {
             get { return PieceNames[(m & pieceMask) >> 16]; }
             set { }
+        }
+        public string Duplicate
+        {
+            get { return char.ConvertFromUtf32((int)((m & duplicateMask) >> 20) + 48); }
+            set { }
+        }
+
+        public void SetDuplicate(char c)
+        {
+            uint mask = (uint)(c - 48) << 20;
+            m &= ~(63U << 20);
+            m |= mask;
         }
         public Move(ushort piece, ushort to, ushort from, ushort promotion, ushort special, ushort capture)
         {

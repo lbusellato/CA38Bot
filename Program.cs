@@ -148,35 +148,9 @@ namespace Ca38Bot
                 List<InlineKeyboardButton> keyList = new List<InlineKeyboardButton>();
                 List<List<InlineKeyboardButton>> keyListList = new List<List<InlineKeyboardButton>>();
                 int count = 0;
-                int j = 0;
-                string duplicate;
                 foreach (Move m in keys)
                 {
-                    duplicate = "";
-                    if (m.From != m.To)
-                    {
-                        for (int i = 0; i < keys.Count(); ++i)
-                        {
-                            if (i == j) continue;
-                            if (m.To == keys.ElementAt(i).To)
-                            {
-                                if (m.From[0] == keys.ElementAt(i).From[0])
-                                {
-                                    duplicate = m.From[1].ToString();
-                                }
-                                else if (m.From[1] == keys.ElementAt(i).From[1])
-                                {
-                                    duplicate = m.From[0].ToString();
-                                }
-                                else 
-                                {
-                                    duplicate = m.From[0].ToString();
-                                }
-                            }
-                        }
-                    }
-                    j++;
-                    string text = (m.From == m.To) ? m.Piece : (m.Piece != "P" ? m.Piece : "") + duplicate + m.Captures + m.To;
+                    string text = (m.From == m.To) ? m.Piece : (m.Piece != "P" ? m.Piece : (m.Captures == "x" && m.Duplicate == "0" ? m.From[0].ToString() : "")) + (m.Duplicate == "0" ? "" : m.Duplicate) + m.Captures + m.To;
                     string callbackData = ((m.From == m.To) ? m.Piece : m.From + m.To) + "/" + text;
                     keyList.Add(InlineKeyboardButton.WithCallbackData(text, callbackData));
                     count++;
@@ -257,39 +231,10 @@ namespace Ca38Bot
                         Move move = botMoves.ElementAt(rnd);
                         ushort from = (ushort)Move.GetSquareIndex(move.From);
                         ushort to = (ushort)Move.GetSquareIndex(move.To);
-                        board.DoMove(new Move(0, to, from, 0, 0, 0));
-                        int enPassantSquareIndex = -1;
-                        if (move.Piece == "P" && move.From[0] == move.To[0] && Math.Abs(move.To[1] - move.From[1]) == 2)
-                        {
-                            enPassantSquareIndex = Move.GetSquareIndex(move.To) + ((move.To[1] > move.From[1]) ? -8 : 8);
-                        }
-                        board.SetEnPassant(enPassantSquareIndex);
+                        board.Make(new Move(0, to, from, 0, 0, 0), board.player ? Side.BLACK : Side.WHITE);
                         db.Games.SingleOrDefault(g => g.ChatID == callbackQuery.Message.Chat.Id).BotGame = fen;
                         db.SaveChanges();
-                        string duplicate = "";
-                        if (move.From != move.To)
-                        {
-                            for (int i = 0; i < botMoves.Count(); ++i)
-                            {
-                                if (i == rnd) continue;
-                                if (move.To == botMoves.ElementAt(i).To)
-                                {
-                                    if (move.From[0] == botMoves.ElementAt(i).From[0])
-                                    {
-                                        duplicate = move.From[1].ToString();
-                                    }
-                                    else if (move.From[1] == botMoves.ElementAt(i).From[1])
-                                    {
-                                        duplicate = move.From[0].ToString();
-                                    }
-                                    else
-                                    {
-                                        duplicate = move.From[0].ToString();
-                                    }
-                                }
-                            }
-                        }
-                        botMove = (move.From == move.To) ? move.Piece : (move.Piece != "P" ? move.Piece : "") + duplicate + move.Captures + move.To;
+                        botMove = (move.From == move.To) ? move.Piece : (move.Piece != "P" ? move.Piece : (move.Captures == "x" && move.Duplicate == "0" ? move.From[0].ToString() : "")) + (move.Duplicate == "0" ? "" : move.Duplicate) + move.Captures + move.To;
                         string history = db.Games.SingleOrDefault(g => g.ChatID == callbackQuery.Message.Chat.Id).GameHistory;
                         history += botMove + ".";
                         db.Games.SingleOrDefault(g => g.ChatID == callbackQuery.Message.Chat.Id).GameHistory = history;
@@ -318,13 +263,7 @@ namespace Ca38Bot
                         ushort from = (ushort)Move.GetSquareIndex(data.Substring(0, 2));
                         ushort to = (ushort)Move.GetSquareIndex(data.Substring(2, 2));
                         Move pMove = new Move(0, to, from, 0, 0, 0);
-                        board.DoMove(pMove);
-                        int enPassantSquareIndex = -1;
-                        if (pMove.Piece == "P" && pMove.From[0] == pMove.To[0] && Math.Abs(pMove.To[1] - pMove.From[1]) == 2)
-                        {
-                            enPassantSquareIndex = Move.GetSquareIndex(pMove.To) + ((pMove.To[1] > pMove.From[1]) ? -8 : 8);
-                        }
-                        board.SetEnPassant(enPassantSquareIndex);
+                        board.Make(pMove, board.player ? Side.WHITE : Side.BLACK);
                         if (playerMove != null)
                         {
                             history = db.Games.SingleOrDefault(g => g.ChatID == callbackQuery.Message.Chat.Id).GameHistory;
@@ -349,37 +288,8 @@ namespace Ca38Bot
                         Move move = botMoves.ElementAt(rnd);
                         from = (ushort)Move.GetSquareIndex(move.From);
                         to = (ushort)Move.GetSquareIndex(move.To);
-                        board.DoMove(new Move(0, to, from, 0, 0, 0));
-                        enPassantSquareIndex = -1;
-                        if (move.Piece == "P" && move.From[0] == move.To[0] && Math.Abs(move.To[1] - move.From[1]) == 2)
-                        {
-                            enPassantSquareIndex = Move.GetSquareIndex(move.To) + ((move.To[1] > move.From[1]) ? - 8 : 8);
-                        }
-                        board.SetEnPassant(enPassantSquareIndex);
-                        string duplicate = "";
-                        if (move.From != move.To)
-                        {
-                            for (int i = 0; i < botMoves.Count(); ++i)
-                            {
-                                if (i == rnd) continue;
-                                if (move.To == botMoves.ElementAt(i).To)
-                                {
-                                    if (move.From[0] == botMoves.ElementAt(i).From[0])
-                                    {
-                                        duplicate = move.From[1].ToString();
-                                    }
-                                    else if (move.From[1] == botMoves.ElementAt(i).From[1])
-                                    {
-                                        duplicate = move.From[0].ToString();
-                                    }
-                                    else
-                                    {
-                                        duplicate = move.From[0].ToString();
-                                    }
-                                }
-                            }
-                        }
-                        botMove = (move.From == move.To) ? move.Piece : (move.Piece != "P" ? move.Piece : "") + duplicate + move.Captures + move.To;
+                        board.Make(new Move(0, to, from, 0, 0, 0), board.player ? Side.BLACK : Side.WHITE);
+                        botMove = (move.From == move.To) ? move.Piece : (move.Piece != "P" ? move.Piece : (move.Captures == "x" && move.Duplicate == "0" ? move.From[0].ToString() : "")) + (move.Duplicate == "0" ? "" : move.Duplicate) + move.Captures + move.To;
 
                         history = db.Games.SingleOrDefault(g => g.ChatID == callbackQuery.Message.Chat.Id).GameHistory;
                         history += botMove + ".";
